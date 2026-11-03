@@ -64,6 +64,21 @@ export function isHiddenFile(path, settings) {
   return false;
 }
 
+/**
+ * A directory row in the file tree. True when this folder is one the test-project or pattern
+ * rule hides. The row stays on screen; the files inside it are hidden separately.
+ * @param {string | null | undefined} path directory path or a single folder name
+ * @param {{ hideTestFolders?: boolean, hidePattern?: string }} settings
+ */
+export function isHiddenFolder(path, settings) {
+  if (!path) return false;
+  const segments = String(path).split(/[\\/]/).filter(Boolean);
+  if (!segments.length) return false;
+  if (settings.hideTestFolders && segments.some((segment) => TEST_FOLDER.test(segment))) return true;
+  const pattern = compileHidePattern(settings.hidePattern);
+  return !!pattern && (patternMatches(pattern, path) || segments.some((segment) => patternMatches(pattern, segment)));
+}
+
 /** Path carried by a Bitbucket file-list link (`#chg-docs/README.md`). */
 export function pathFromFileLink(href) {
   if (!href) return null;

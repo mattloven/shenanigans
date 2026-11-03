@@ -1,4 +1,4 @@
-import { compileHidePattern, isHiddenFile, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
+import { compileHidePattern, isHiddenFile, isHiddenFolder, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
 const COG_NAME = 'Global diff settings';
@@ -259,6 +259,7 @@ function applyHidden(root, settings) {
   for (const article of findFileDiffs(root)) {
     setHidden(article, isHiddenFile(getFilePath(article), settings));
   }
+  markHiddenFolders(root, settings);
   const count = root.querySelector?.('.bbrd-filters .bbrd-hidden-count') ?? document.querySelector('.bbrd-filters .bbrd-hidden-count');
   if (count) {
     const text = hidden === 0 ? '' : `${hidden} hidden`;
@@ -269,4 +270,38 @@ function applyHidden(root, settings) {
 
 function setHidden(element, hide) {
   if (element.classList.contains('bbrd-file-hidden') !== hide) element.classList.toggle('bbrd-file-hidden', hide);
+}
+
+function markHiddenFolders(root, settings) {
+  if (!root.querySelectorAll) return;
+  for (const button of root.querySelectorAll('button')) {
+    if (!(button instanceof HTMLButtonElement)) continue;
+    if (!button.querySelector('[aria-label="Directory"]')) continue;
+    const list = button.closest('ul[role="list"]');
+    if (!list?.querySelector('a[href*="#chg-"]')) continue;
+    syncFolderPill(button, isHiddenFolder(directoryPath(button), settings));
+  }
+}
+
+function directoryPath(button) {
+  const texts = [...button.querySelectorAll('span')]
+    .filter((span) => !span.classList.contains('bbrd-hidden-pill') && !span.querySelector('span, svg'))
+    .map((span) => span.textContent.replace(/\s+/g, ' ').trim())
+    .filter((text) => text && text !== 'Directory');
+  return texts.sort((a, b) => b.length - a.length)[0] ?? '';
+}
+
+function syncFolderPill(button, show) {
+  const pills = [...button.querySelectorAll('.bbrd-hidden-pill')];
+  if (!show) {
+    for (const pill of pills) pill.remove();
+    return;
+  }
+  for (const extra of pills.slice(1)) extra.remove();
+  if (pills.length > 0) return;
+  const pill = button.ownerDocument.createElement('span');
+  pill.className = 'bbrd-hidden-pill';
+  pill.textContent = 'Hidden';
+  pill.title = 'Hidden by Bitbucket Rich Diff';
+  button.append(pill);
 }

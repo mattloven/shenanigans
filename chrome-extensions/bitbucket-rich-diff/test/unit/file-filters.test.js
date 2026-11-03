@@ -99,4 +99,36 @@ describe('mountFileFilters', () => {
     mountFileFilters(document, { ...DEFAULT_SETTINGS, hideMarkdown: true, hidePattern: '' }, onChange);
     expect(pattern.value).toBe('still typing');
   });
+
+  it('keeps a hidden folder in the tree and marks it with one pill', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <ul role="list" id="tree">
+        <li>
+          <button type="button"><span role="img" aria-label="Directory"></span><span>src</span></button>
+          <ul role="list">
+            <li>
+              <button type="button"><span role="img" aria-label="Directory"></span><span>Payment.Tests</span></button>
+              <ul role="list"><li><a href="#chg-src/Payment.Tests/ChargeTests.cs">ChargeTests.cs</a></li></ul>
+            </li>
+            <li><a href="#chg-src/App.cs">App.cs</a></li>
+          </ul>
+        </li>
+      </ul>`);
+    const onChange = vi.fn();
+    const named = (name) => [...document.querySelectorAll('#tree button')].find((button) => [...button.querySelectorAll('span')].some((span) => span.textContent === name));
+    const folder = () => named('Payment.Tests');
+    const src = () => named('src');
+
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, hideTestFolders: true }, onChange);
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, hideTestFolders: true }, onChange);
+    expect(folder().querySelectorAll('.bbrd-hidden-pill')).toHaveLength(1);
+    expect(folder().querySelector('.bbrd-hidden-pill').textContent).toBe('Hidden');
+    expect(folder().closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
+    expect(src().querySelector('.bbrd-hidden-pill')).toBeNull();
+    expect(document.querySelector('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
+    expect(document.querySelector('a[href="#chg-src/App.cs"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
+
+    mountFileFilters(document, DEFAULT_SETTINGS, onChange);
+    expect(folder().querySelector('.bbrd-hidden-pill')).toBeNull();
+  });
 });

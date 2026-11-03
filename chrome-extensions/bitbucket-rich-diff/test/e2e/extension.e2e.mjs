@@ -256,8 +256,14 @@ describe('mock pull request', () => {
     assert.equal(await article('src/Payment.UnitTests/FlowTests.cs').isVisible(), false);
     assert.equal(await page.locator('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').isVisible(), false);
     assert.equal(await article('src/Payment.cs').isVisible(), true);
+    const folderNamed = (name) => page.locator('#file-list button').filter({ has: page.locator('.dirname', { hasText: new RegExp(`^${name}$`) }) });
+    const testsFolder = folderNamed('Payment\\.Tests');
+    assert.equal(await testsFolder.locator('.bbrd-hidden-pill').textContent(), 'Hidden');
+    assert.equal(await folderNamed('Payment\\.UnitTests').locator('.bbrd-hidden-pill').count(), 1);
+    assert.equal(await folderNamed('src').locator('.bbrd-hidden-pill').count(), 0);
     await panel.getByLabel('Test projects').uncheck();
     assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
+    assert.equal(await testsFolder.locator('.bbrd-hidden-pill').count(), 0);
 
     const pattern = panel.locator('[data-filter="hidePattern"]');
     await pattern.fill('\\.svg$');

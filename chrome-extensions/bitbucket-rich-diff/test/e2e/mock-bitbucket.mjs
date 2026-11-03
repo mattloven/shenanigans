@@ -34,6 +34,30 @@ export const MOCK_FILES = [
 
 const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+function fileListHtml(files) {
+  const root = { dirs: new Map(), files: [] };
+  for (const file of files) {
+    const parts = file.path.split('/');
+    let node = root;
+    for (const part of parts.slice(0, -1)) {
+      if (!node.dirs.has(part)) node.dirs.set(part, { name: part, dirs: new Map(), files: [] });
+      node = node.dirs.get(part);
+    }
+    node.files.push(file);
+  }
+  const render = (node) => {
+    let html = '';
+    for (const child of node.dirs.values()) {
+      html += `<li><button type="button" aria-expanded="true"><span role="img" aria-label="Directory"></span><span class="dirname">${escape(child.name)}</span></button><ul role="list">${render(child)}</ul></li>`;
+    }
+    for (const file of node.files) {
+      html += `<li><a href="#chg-${escape(file.path)}"><span>${escape(file.path.split('/').pop())}</span></a></li>`;
+    }
+    return html;
+  };
+  return render(root);
+}
+
 function diffLine(raw) {
   const prefix = raw[0];
   if (prefix !== '+' && prefix !== '-' && prefix !== ' ') return `<div class="hunk">${escape(raw)}</div>`;
@@ -103,7 +127,7 @@ function pageHtml() {
       // Bitbucket renders file diffs asynchronously after the SPA boots.
       setTimeout(() => {
         document.getElementById('files').innerHTML = files.map((f) => f.html).join('');
-        document.getElementById('file-list').innerHTML = files.map((f) => '<li><a href="#chg-' + f.path + '"><span>' + f.path + '</span></a></li>').join('');
+        document.getElementById('file-list').innerHTML = ${JSON.stringify(fileListHtml(MOCK_FILES))};
         for (const header of document.querySelectorAll('.file-header')) {
           header.addEventListener('click', () => header.closest('article').classList.toggle('collapsed'));
         }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classifyDiffRows, classifySideBySideRows, commentLanguage, hiddenIntervals, scanLine, initialCommentState } from '../../src/core/comments.js';
-import { isHiddenFile, parseExtensions, pathFromFileLink } from '../../src/core/file-filter.js';
+import { isHiddenFile, isHiddenFolder, parseExtensions, pathFromFileLink } from '../../src/core/file-filter.js';
 
 const both = { hideCodeComments: true, hideSummaryComments: true };
 const codeOnly = { hideCodeComments: true, hideSummaryComments: false };
@@ -173,6 +173,17 @@ describe('file filter', () => {
     expect(isHiddenFile('tmp/cache/notes.txt', { hidePattern: '(^|/)tmp(/|$)' })).toBe(true);
     expect(isHiddenFile('src/Payment.cs', { hidePattern: '[' })).toBe(false);
     expect(isHiddenFile('src/Payment.cs', { hidePattern: '' })).toBe(false);
+  });
+
+  it('marks a folder the test-project or pattern rule hides, and leaves its parents alone', () => {
+    expect(isHiddenFolder('src/Payment.Tests', { hideTestFolders: true })).toBe(true);
+    expect(isHiddenFolder('Payment.UnitTests', { hideTestFolders: true })).toBe(true);
+    expect(isHiddenFolder('src', { hideTestFolders: true })).toBe(false);
+    expect(isHiddenFolder('src/Payment.Tests.Extra', { hideTestFolders: true })).toBe(false);
+    expect(isHiddenFolder('src/Payment.Tests', { hideTestFolders: false })).toBe(false);
+    expect(isHiddenFolder('assets', { hidePattern: '\\.svg$' })).toBe(false);
+    expect(isHiddenFolder('src/tmp/cache', { hidePattern: '(^|/)tmp(/|$)' })).toBe(true);
+    expect(isHiddenFolder('src/Payment.cs', { hidePattern: '[' })).toBe(false);
   });
 
   it('reads the file path out of a list link', () => {

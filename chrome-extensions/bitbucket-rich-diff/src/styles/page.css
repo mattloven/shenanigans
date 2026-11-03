@@ -234,6 +234,33 @@ button.bbrd-menu-button:focus-visible {
   border-color: var(--ds-border-danger, #e2483d);
 }
 
+.bbrd-hidden-pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  box-sizing: border-box;
+  height: 16px;
+  margin: 0 0 0 8px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--ds-background-information, #e9f2fe);
+  color: var(--ds-text-information, #1558bc);
+  font-family: var(--ds-font-family-body, inherit);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0;
+  vertical-align: middle;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+button:has(> .bbrd-hidden-pill) {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+}
+
 .bbrd-file-hidden,
 .bbrd-hide-line {
   display: none !important;
