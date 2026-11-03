@@ -112,6 +112,7 @@ For JavaScript, TypeScript (`.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`
 - A line that is only a hidden comment disappears. A trailing comment is removed and the code in front of it stays.
 - Text inside strings, template literals, C# verbatim and interpolated strings, character literals and JavaScript regexes is left alone. `http://…` inside a string is not treated as a comment.
 - Removed and added lines are read as two separate files, because a diff interleaves them. A context line is hidden only when both sides agree it is a hidden comment.
+- In side-by-side view each column is masked on its own, so an added comment can disappear while the code it replaced stays visible.
 - Comment state carries across the visible lines of a hunk. A block comment that opened in a collapsed part of the file can be missed; expanding the hunk and toggling the option again rescans.
 
 ### Settings (popup and options page, synced through `chrome.storage.sync`)

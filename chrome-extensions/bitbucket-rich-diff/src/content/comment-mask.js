@@ -1,4 +1,4 @@
-import { classifyDiffRows, commentLanguage } from '../core/comments.js';
+import { classifyDiffRows, classifySideBySideRows, commentLanguage } from '../core/comments.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
 const WRAP = 'data-bbrd-wrap';
@@ -7,6 +7,7 @@ const WRAP = 'data-bbrd-wrap';
 export function clearCommentMasks(root) {
   for (const row of root.querySelectorAll('.bbrd-hide-line')) row.classList.remove('bbrd-hide-line');
   for (const wrap of [...root.querySelectorAll(`[${WRAP}]`)]) wrap.replaceWith(...wrap.childNodes);
+  for (const mark of [...root.querySelectorAll('[data-bbrd-mask]')]) mark.remove();
   for (const cell of root.querySelectorAll('[data-line-type]')) cell.normalize();
 }
 
@@ -73,36 +74,90 @@ export function updateCommentMasks(root, settings) {
     const language = commentLanguage(getFilePath(article));
     const rows = [...article.querySelectorAll('[data-key="code-line"]')];
     const signature = active && language ? `${settings.hideCodeComments}/${settings.hideSummaryComments}/${rows.length}/${textSize(rows)}` : 'off';
-    if (article.getAttribute('data-bbrd-comments') === signature) continue;
+    // Syntax highlighting rewrites the cell after we mask it. The line text stays the
+    // same, so the signature matches, but the mask marker is gone and has to be put back.
+    if (article.getAttribute('data-bbrd-comments') === signature && masksIntact(rows)) continue;
     clearCommentMasks(article);
-    if (signature !== 'off') maskArticle(article, rows, language, settings);
+    if (signature !== 'off') maskArticle(rows, language, settings);
     article.setAttribute('data-bbrd-comments', signature);
   }
 }
 
+function masksIntact(rows) {
+  return rows.every((row) => [...row.querySelectorAll('[data-line-type]')].every((cell) => cell.querySelector('[data-bbrd-mask]')));
+}
+
 function textSize(rows) {
   let size = 0;
-  for (const row of rows) size += row.querySelector('[data-line-type]')?.textContent.length ?? 0;
+  for (const row of rows) {
+    for (const cell of row.querySelectorAll('[data-line-type]')) size += cell.textContent.length;
+  }
   return size;
 }
 
-function maskArticle(article, rows, language, settings) {
+/** Bitbucket's highlighter appends a newline that is not part of the source line. */
+function sourceText(text) {
+  return text.endsWith('\n') ? text.slice(0, -1) : text;
+}
+
+function lineTypeOf(cell) {
+  const typeAttr = cell.getAttribute('data-line-type');
+  return typeAttr === '+' || typeAttr === '-' ? typeAttr : ' ';
+}
+
+function lineRoot(cell, row) {
+  return cell.closest('[data-qa="code-line"]') || row;
+}
+
+function maskArticle(rows, language, settings) {
   const described = [];
   for (const row of rows) {
-    const cell = row.querySelector('[data-line-type]');
-    if (!cell) continue;
-    const typeAttr = cell.getAttribute('data-line-type');
-    const type = typeAttr === '+' || typeAttr === '-' ? typeAttr : ' ';
-    described.push({ row, cell, type, text: cell.textContent });
+    const cells = [...row.querySelectorAll('[data-line-type]')].map((cell) => ({
+      cell,
+      line: lineRoot(cell, row),
+      type: lineTypeOf(cell),
+      text: sourceText(cell.textContent ?? ''),
+    }));
+    if (cells.length) described.push({ row, cells });
   }
+  if (described.some((row) => row.cells.length > 1)) maskSideBySide(described, language, settings);
+  else maskUnified(described, language, settings);
+}
+
+function maskUnified(described, language, settings) {
   const classified = classifyDiffRows(
-    described.map((row) => ({ type: row.type, text: row.text })),
+    described.map((row) => ({ type: row.cells[0].type, text: row.cells[0].text })),
     language,
     settings,
   );
   described.forEach((row, index) => {
-    const { hideLine, intervals } = classified[index];
-    row.row.classList.toggle('bbrd-hide-line', hideLine);
-    if (!hideLine) maskCell(row.cell, intervals);
+    applyCell(row.cells[0], classified[index]);
+    if (classified[index].hideLine) row.row.classList.add('bbrd-hide-line');
   });
+}
+
+function maskSideBySide(described, language, settings) {
+  const classified = classifySideBySideRows(
+    described.map((row) => ({ cells: row.cells.map((cell) => ({ type: cell.type, text: cell.text })) })),
+    language,
+    settings,
+  );
+  described.forEach((row, index) => {
+    const results = classified[index];
+    let allHidden = results.length > 0;
+    row.cells.forEach((cell, cellIndex) => {
+      applyCell(cell, results[cellIndex]);
+      if (!results[cellIndex].hideLine) allHidden = false;
+    });
+    if (allHidden) row.row.classList.add('bbrd-hide-line');
+  });
+}
+
+function applyCell(entry, result) {
+  entry.line.classList.toggle('bbrd-hide-line', result.hideLine);
+  if (!result.hideLine) maskCell(entry.cell, result.intervals);
+  const mark = document.createElement('span');
+  mark.setAttribute('data-bbrd-mask', '');
+  mark.hidden = true;
+  entry.cell.append(mark);
 }

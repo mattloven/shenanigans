@@ -166,10 +166,7 @@ export function scanLine(line, state, language) {
       continue;
     }
     if (language === 'cs' && ch === "'") {
-      index += 1;
-      if (line[index] === '\\') index += 2;
-      else index += 1;
-      if (line[index] === "'") index += 1;
+      index = consumeCsChar(line, index);
       continue;
     }
     if (language === 'js' && ch === '`') {
@@ -204,6 +201,22 @@ function kindOf(stack) {
 function startsCsString(line, index) {
   const rest = line.slice(index);
   return /^(?:\$@|@\$|@|\$)"/.test(rest);
+}
+
+/** A C# character literal, including '"' and '\'' so the quote cannot open a string. */
+function consumeCsChar(line, index) {
+  index += 1;
+  if (index >= line.length) return index;
+  if (line[index] === '\\') {
+    const escape = line[index + 1];
+    index += 2;
+    if (escape === 'u') index += 4;
+    else if (escape === 'U') index += 8;
+  } else {
+    index += 1;
+  }
+  if (line[index] === "'") index += 1;
+  return index;
 }
 
 function openCsString(line, index) {
@@ -323,5 +336,49 @@ export function classifyDiffRows(rows, language, opts) {
     newState = newScan.state;
     const intervals = overlap(hiddenIntervals(oldScan.ranges, opts), hiddenIntervals(newScan.ranges, opts));
     return { hideLine: lineIsFullyHidden(row.text, intervals), intervals };
+  });
+}
+
+function columnSpacer(cell, other, oppositeChange) {
+  return !!cell && !!other && cell.type === ' ' && cell.text.trim() === '' && other.type === oppositeChange;
+}
+
+/**
+ * Side-by-side diffs put the old line and the new line in the same visual row.
+ * Each column is its own lex stream. A blank cell opposite an added or removed
+ * line is padding, not a source line.
+ *
+ * @param {Array<{ cells: Array<{ type: '+' | '-' | ' ', text: string }> }>} rows
+ * @param {CommentLanguage} language
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean }} opts
+ * @returns {Array<Array<{ hideLine: boolean, intervals: { start: number, end: number }[] }>>}
+ */
+export function classifySideBySideRows(rows, language, opts) {
+  let oldState = initialCommentState();
+  let newState = initialCommentState();
+  const shown = () => ({ hideLine: false, intervals: [] });
+  return rows.map(({ cells }) => {
+    const [left, right] = cells;
+    /** @type {Array<{ hideLine: boolean, intervals: { start: number, end: number }[] }>} */
+    const out = [];
+    if (left) {
+      if (columnSpacer(left, right, '+')) out.push(shown());
+      else {
+        const scanned = scanLine(left.text, oldState, language);
+        oldState = scanned.state;
+        const intervals = hiddenIntervals(scanned.ranges, opts);
+        out.push({ hideLine: lineIsFullyHidden(left.text, intervals), intervals });
+      }
+    }
+    if (right) {
+      if (columnSpacer(right, left, '-')) out.push(shown());
+      else {
+        const scanned = scanLine(right.text, newState, language);
+        newState = scanned.state;
+        const intervals = hiddenIntervals(scanned.ranges, opts);
+        out.push({ hideLine: lineIsFullyHidden(right.text, intervals), intervals });
+      }
+    }
+    return out;
   });
 }

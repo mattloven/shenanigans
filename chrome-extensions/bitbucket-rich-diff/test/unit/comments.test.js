@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDiffRows, commentLanguage, hiddenIntervals, scanLine, initialCommentState } from '../../src/core/comments.js';
+import { classifyDiffRows, classifySideBySideRows, commentLanguage, hiddenIntervals, scanLine, initialCommentState } from '../../src/core/comments.js';
 import { isHiddenFile, parseExtensions, pathFromFileLink } from '../../src/core/file-filter.js';
 
 const both = { hideCodeComments: true, hideSummaryComments: true };
@@ -63,6 +63,16 @@ describe('scanLine csharp', () => {
     const open = hidden('var s = @"first', 'cs', codeOnly);
     expect(hidden('// still the string', 'cs', codeOnly, open.state).text).toBe('');
   });
+
+  it('does not treat a quote character literal as the start of a string', () => {
+    const rows = [
+      { type: ' ', text: "var quote = '\"';" },
+      { type: ' ', text: '    /// <summary>Still a doc comment.</summary>' },
+      { type: ' ', text: '    // still a comment' },
+    ];
+    const result = classifyDiffRows(rows, 'cs', both);
+    expect(result.map((row) => row.hideLine)).toEqual([false, true, true]);
+  });
 });
 
 describe('classifyDiffRows', () => {
@@ -92,6 +102,31 @@ describe('classifyDiffRows', () => {
     const [row] = classifyDiffRows([{ type: '+', text: 'const a = 1; // note' }], 'js', codeOnly);
     expect(row.hideLine).toBe(false);
     expect(row.intervals.map(({ start, end }) => ({ start, end }))).toEqual([{ start: 13, end: 20 }]);
+  });
+});
+
+describe('classifySideBySideRows', () => {
+  it('hides a C# comment added opposite a blank cell without hiding the other column', () => {
+    const rows = [
+      { cells: [{ type: ' ', text: '    var before = 1;' }, { type: ' ', text: '    var before = 1;' }] },
+      { cells: [{ type: ' ', text: '' }, { type: '+', text: '    // new note' }] },
+      { cells: [{ type: '-', text: '    // old note' }, { type: '+', text: '    var after = 2;' }] },
+      { cells: [{ type: ' ', text: '' }, { type: '+', text: '    /// <summary>Docs.</summary>' }] },
+    ];
+    const result = classifySideBySideRows(rows, 'cs', both);
+    expect(result[1].map((cell) => cell.hideLine)).toEqual([false, true]);
+    expect(result[2].map((cell) => cell.hideLine)).toEqual([true, false]);
+    expect(result[3].map((cell) => cell.hideLine)).toEqual([false, true]);
+  });
+
+  it('keeps a block comment open down the new column only', () => {
+    const rows = [
+      { cells: [{ type: ' ', text: '' }, { type: '+', text: '    /* open' }] },
+      { cells: [{ type: ' ', text: '    code();' }, { type: '+', text: '    still hidden' }] },
+    ];
+    const result = classifySideBySideRows(rows, 'cs', codeOnly);
+    expect(result[1][0].hideLine).toBe(false);
+    expect(result[1][1].hideLine).toBe(true);
   });
 });
 
