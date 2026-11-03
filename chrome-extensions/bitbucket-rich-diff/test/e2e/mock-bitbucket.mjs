@@ -77,6 +77,9 @@ function pageHtml() {
     .sidebar li { list-style: none; margin: 2px 0; }
     .sidebar a { color: inherit; text-decoration: none; font-size: 13px; }
     .scroller { position: sticky; top: 0; flex: 1; height: 100%; overflow: auto; padding: 16px 24px; box-sizing: border-box; }
+    .diff-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0 0 12px; padding: 8px 0; background: #fff; }
+    .icon-btn { width: 32px; height: 32px; border: 0; border-radius: 4px; background: transparent; }
+    .vh { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
     article { border: 1px solid #dfe1e6; border-radius: 4px; margin-bottom: 16px; }
     .file-header { position: sticky; top: 0; z-index: 180; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; background: #f7f8f9; border-bottom: 1px solid #dfe1e6; cursor: pointer; }
     .file-header h2 { font-size: 14px; margin: 0; }
@@ -90,7 +93,10 @@ function pageHtml() {
     <div class="top">acme / payments — Pull request #42: Payments docs refresh</div>
     <div class="page">
       <aside class="sidebar"><div><button type="button">Filter files</button></div><ul role="list" id="file-list"></ul></aside>
-      <div class="scroller"><div id="files"></div></div>
+      <div class="scroller">
+        <div class="diff-bar"><span>0 of 11 files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button></div>
+        <div id="files"></div>
+      </div>
     </div>
     <script>
       const files = ${JSON.stringify(MOCK_FILES.map((f) => ({ path: f.path, html: articleHtml(f) })))};
@@ -102,6 +108,12 @@ function pageHtml() {
           header.addEventListener('click', () => header.closest('article').classList.toggle('collapsed'));
         }
       }, 300);
+      window.__replaceDiffToolbar = () => {
+        const bar = document.querySelector('.diff-bar');
+        const clone = bar.cloneNode(true);
+        clone.querySelectorAll('.bbrd-menu-host').forEach((node) => node.remove());
+        bar.replaceWith(clone);
+      };
       window.__rerenderHeader = (index) => {
         const header = document.querySelectorAll('[data-qa="bk-file__header"]')[index];
         const clone = header.cloneNode(true);

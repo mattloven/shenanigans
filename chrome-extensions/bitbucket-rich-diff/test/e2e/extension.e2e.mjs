@@ -24,6 +24,15 @@ let page;
 const article = (filePath) => page.locator(`article[aria-label="Diff of file ${filePath}"]`);
 const shot = (name, locator = page) => locator.screenshot({ path: path.join(results, `${name}.png`) });
 
+async function openHideMenu() {
+  const panel = page.locator('.bbrd-filters');
+  if (!(await panel.isVisible())) {
+    await page.getByRole('button', { name: 'Hide files and comments' }).click();
+    await panel.waitFor();
+  }
+  return panel;
+}
+
 before(async () => {
   assert.ok(fs.existsSync(path.join(dist, 'manifest.json')), 'run `npm run build` first');
   context = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'bbrd-e2e-')), {
@@ -214,8 +223,14 @@ describe('mock pull request', () => {
   });
 
   it('hides markdown and chosen extensions from the file list and the diff', async () => {
-    const panel = page.locator('.bbrd-filters');
-    await panel.waitFor();
+    assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.sidebar .bbrd-filters').count(), 0);
+    const besideCog = await page.evaluate(() => {
+      const cog = [...document.querySelectorAll('button')].find((button) => (button.textContent || '').includes('Global diff settings') && !button.closest('.bbrd-menu-host'));
+      return document.querySelector('.bbrd-menu-host')?.nextElementSibling === cog;
+    });
+    assert.equal(besideCog, true);
+    const panel = await openHideMenu();
     await panel.getByLabel('Markdown files').check();
     assert.equal(await article('README.md').isVisible(), false);
     assert.equal(await article('docs/onboarding.md').isVisible(), false);
@@ -228,7 +243,7 @@ describe('mock pull request', () => {
     await extensions.blur();
     assert.equal(await article('assets/logo.svg').isVisible(), false);
     assert.equal(await page.locator('a[href="#chg-src/checkout.js"]').isVisible(), true);
-    await shot('mock-file-list-hidden', page.locator('.sidebar'));
+    await shot('mock-file-list-hidden', panel);
 
     await extensions.fill('');
     await extensions.blur();
@@ -258,8 +273,21 @@ describe('mock pull request', () => {
     assert.equal(await article('assets/logo.svg').isVisible(), true);
   });
 
+  it('keeps a single hide menu when the diff toolbar is re-rendered', async () => {
+    await page.evaluate(() => window.__replaceDiffToolbar());
+    await page.evaluate(() => window.__replaceDiffToolbar());
+    await page.getByRole('button', { name: 'Hide files and comments' }).waitFor();
+    assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.bbrd-filters').count(), 1);
+    const besideCog = await page.evaluate(() => {
+      const cog = [...document.querySelectorAll('button')].find((button) => (button.textContent || '').includes('Global diff settings') && !button.closest('.bbrd-menu-host'));
+      return document.querySelector('.bbrd-menu-host')?.nextElementSibling === cog;
+    });
+    assert.equal(besideCog, true);
+  });
+
   it('hides code comments and summary comments in JavaScript and C# diffs', async () => {
-    const panel = page.locator('.bbrd-filters');
+    const panel = await openHideMenu();
     const js = article('src/checkout.js');
     const cs = article('src/Payment.cs');
     const shown = (root, text) => root.locator('[data-key="code-line"]:visible', { hasText: text }).count();

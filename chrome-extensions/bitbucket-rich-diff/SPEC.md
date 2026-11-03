@@ -97,13 +97,13 @@ same on the other. A parse error affects only its own pane.
 
 ### File list filters
 
-A filter bar sits at the top of the pull request file list (and the same controls are in the extension settings):
+A **Hide** button sits immediately to the left of the Files changed cog (the button named Global diff settings, top right of the diff). It opens one menu. Bitbucket re-renders that toolbar as you scroll and load files; the extension moves this same menu onto the new cog instead of inserting another copy. The same controls are in the extension settings:
 
 - **Hide .md files.** Also hides `.markdown`, `.mdown`, `.mkd` and `.mkdn`. The file disappears from the list and from the diff.
 - **Hide extensions.** A text field such as `.svg, .lock, .min.js`. A file matches when its path ends with one of those suffixes.
 - **Hide test projects.** Hides every file inside a folder whose name ends in `Tests`, such as `Foo.Tests`, `Foo.UnitTests` and `Foo.IntegrationTests`.
 - **Hide pattern.** A regular expression tested against the full path, each folder name, and the file name. An invalid pattern hides nothing.
-- The bar reports how many files are hidden.
+- The menu reports how many files are hidden.
 
 ### Code comments in diffs
 
@@ -121,7 +121,7 @@ For JavaScript, TypeScript (`.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`
 
 - Per file type: enable tabs, and the default tab.
 - Show deletions, Only changes, Preview layout.
-- Hide .md files, extra extensions, hide code comments, hide summary comments.
+- Hide .md files, extra extensions, test projects, a hide pattern, hide code comments, hide summary comments.
 - Toolbar toggles and the layout switch write the same settings, and every open file and tab
   updates immediately.
 
@@ -172,6 +172,7 @@ Files over 2 MB are refused with a clear message.
 | File diff | `article[data-qa="branch-diff-file"]`, with `aria-label="Diff of file {path}"` |
 | Header (sticky, toggles collapse on click) | `[data-qa="bk-file__header"]` |
 | Diff body | `[data-qa="bk-file__content"]` |
+| Files changed cog | `button` whose accessible name is `Global diff settings` (the name is an inner span; the button has no stable `data-qa`). The Hide button is inserted as the cog's previous sibling. |
 
 - Tabs are inserted before the header's last child (the Viewed/actions group).
 - The panel host is inserted right before the diff body. The diff body is hidden by CSS keyed on
