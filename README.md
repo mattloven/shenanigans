@@ -13,4 +13,4 @@ npm install
 npm run build
 ```
 
-In Git Bash, backslashes are escape characters, so use `D:/Code/mattloven/shenanigans` instead. Build from `chrome-extensions/bitbucket-rich-diff`. The repository root has no `package.json`.
+In Git Bash, backslashes are escape characters, so use `D:/Code/mattloven/shenanigans` instead. `npm run build` from the repository root builds the extension. The folder to load is `chrome-extensions/bitbucket-rich-diff/dist`. That folder is gitignored, so the editor hides it; File Explorer does not.

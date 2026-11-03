@@ -1,0 +1,7 @@
+{
+  "name": "shenanigans",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix chrome-extensions/bitbucket-rich-diff"
+  }
+}

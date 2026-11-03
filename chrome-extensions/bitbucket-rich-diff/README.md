@@ -36,8 +36,14 @@ npm run build
 
 `npm install` for this package reports **0 vulnerabilities**. A count of 29 means npm ran against a different `package.json` than this folder. `npm run build` only bundles with esbuild. The test tools (`vitest`, `jsdom`, `playwright-core`) are not part of the extension you load into Chrome.
 
+A successful build ends with `Load this folder in chrome://extensions:` and the full path of `dist`. On this machine that path is:
+
+`D:\Code\mattloven\shenanigans\chrome-extensions\bitbucket-rich-diff\dist`
+
+`dist/` is in `.gitignore`, so Cursor's file tree hides it. File Explorer shows it. In Cursor, open Settings, search for **Exclude Git Ignore**, and turn that Explorer setting off if you want the folder in the sidebar.
+
 1. Open `chrome://extensions` and turn on **Developer mode**.
-2. Click **Load unpacked** and select the `dist/` folder created above.
+2. Click **Load unpacked** and select that `dist` folder. You can paste the path into the folder picker.
 3. Open any pull request on bitbucket.org and go to **Files changed**.
 
 Settings are in the extension's toolbar popup.

@@ -45,6 +45,9 @@ const options = {
 if (watch) {
   const ctx = await esbuild.context(options);
   await ctx.watch();
+  console.log(`Watching ${outdir}`);
 } else {
   await esbuild.build(options);
+  console.log(`\nLoad this folder in chrome://extensions:\n${outdir}\n`);
+  console.log('dist is listed in .gitignore, so the editor file tree hides it. The folder is on disk at the path above.');
 }
