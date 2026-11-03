@@ -175,6 +175,10 @@ article[data-bbrd-view]:not([data-bbrd-view='diff']) [data-qa='bk-file__content'
   outline: none;
 }
 
+.bbrd-ext input[aria-invalid='true'] {
+  border-color: var(--ds-border-danger, #e2483d);
+}
+
 .bbrd-file-hidden,
 .bbrd-hide-line {
   display: none !important;

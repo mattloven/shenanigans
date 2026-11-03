@@ -156,6 +156,25 @@ describe('file filter', () => {
     expect(isHiddenFile('README.md', { hideMarkdown: false, hiddenExtensions: [] })).toBe(false);
   });
 
+  it('hides every file inside a folder whose name ends in Tests', () => {
+    const tests = { hideTestFolders: true };
+    expect(isHiddenFile('src/Payment.Tests/ChargeTests.cs', tests)).toBe(true);
+    expect(isHiddenFile('src/Payment.UnitTests/ChargeTests.cs', tests)).toBe(true);
+    expect(isHiddenFile('src/Payment.IntegrationTests/Flow.cs', tests)).toBe(true);
+    expect(isHiddenFile('tests/Payment.Tests/ChargeTests.cs', tests)).toBe(true);
+    expect(isHiddenFile('src/Payment.cs', tests)).toBe(false);
+    expect(isHiddenFile('src/Payment.Tests.Extra/ChargeTests.cs', tests)).toBe(false);
+    expect(isHiddenFile('src/Payment.Tests/ChargeTests.cs', { hideTestFolders: false })).toBe(false);
+  });
+
+  it('hides paths, folders and file names that match a regular expression', () => {
+    expect(isHiddenFile('assets/logo.svg', { hidePattern: '\\.svg$' })).toBe(true);
+    expect(isHiddenFile('src/Payment.cs', { hidePattern: '\\.svg$' })).toBe(false);
+    expect(isHiddenFile('tmp/cache/notes.txt', { hidePattern: '(^|/)tmp(/|$)' })).toBe(true);
+    expect(isHiddenFile('src/Payment.cs', { hidePattern: '[' })).toBe(false);
+    expect(isHiddenFile('src/Payment.cs', { hidePattern: '' })).toBe(false);
+  });
+
   it('reads the file path out of a list link', () => {
     expect(pathFromFileLink('#chg-docs/README.md')).toBe('docs/README.md');
     expect(pathFromFileLink('https://bitbucket.org/a/b/pull-requests/1/diff#chg-a%20b.json')).toBe('a b.json');

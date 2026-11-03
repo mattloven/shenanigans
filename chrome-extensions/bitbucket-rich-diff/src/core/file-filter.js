@@ -22,15 +22,46 @@ export function parseExtensions(value) {
   return out;
 }
 
+/** A test project folder: the name ends in Tests, as in Foo.Tests or Foo.UnitTests. */
+export const TEST_FOLDER = /.*Tests$/i;
+
+const MAX_PATTERN_LENGTH = 200;
+
+/**
+ * @param {string | null | undefined} source
+ * @returns {RegExp | null} null when the field is empty or the pattern is not valid
+ */
+export function compileHidePattern(source) {
+  const text = String(source ?? '').trim();
+  if (!text || text.length > MAX_PATTERN_LENGTH) return null;
+  try {
+    return new RegExp(text);
+  } catch {
+    return null;
+  }
+}
+
+function patternMatches(pattern, value) {
+  pattern.lastIndex = 0;
+  return pattern.test(value);
+}
+
 /**
  * @param {string | null | undefined} path
- * @param {{ hideMarkdown: boolean, hiddenExtensions: string[] }} settings
+ * @param {{ hideMarkdown?: boolean, hiddenExtensions?: string[], hideTestFolders?: boolean, hidePattern?: string }} settings
  */
 export function isHiddenFile(path, settings) {
   if (!path) return false;
   const lower = path.toLowerCase();
-  const extensions = settings.hideMarkdown ? [...settings.hiddenExtensions, ...MARKDOWN_EXTENSIONS] : settings.hiddenExtensions;
-  return extensions.some((ext) => lower.endsWith(ext));
+  const hiddenExtensions = settings.hiddenExtensions ?? [];
+  const extensions = settings.hideMarkdown ? [...hiddenExtensions, ...MARKDOWN_EXTENSIONS] : hiddenExtensions;
+  if (extensions.some((ext) => lower.endsWith(ext))) return true;
+  const segments = path.split(/[\\/]/).filter(Boolean);
+  const folders = segments.slice(0, -1);
+  if (settings.hideTestFolders && folders.some((segment) => TEST_FOLDER.test(segment))) return true;
+  const pattern = compileHidePattern(settings.hidePattern);
+  if (pattern && (patternMatches(pattern, path) || segments.some((segment) => patternMatches(pattern, segment)))) return true;
+  return false;
 }
 
 /** Path carried by a Bitbucket file-list link (`#chg-docs/README.md`). */

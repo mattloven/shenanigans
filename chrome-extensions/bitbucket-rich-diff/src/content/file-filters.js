@@ -1,4 +1,4 @@
-import { isHiddenFile, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
+import { compileHidePattern, isHiddenFile, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
 /**
@@ -31,12 +31,18 @@ function ensurePanel(list, settings, onChange) {
   const markdown = panel.querySelector('[data-filter="hideMarkdown"]');
   const code = panel.querySelector('[data-filter="hideCodeComments"]');
   const summary = panel.querySelector('[data-filter="hideSummaryComments"]');
+  const tests = panel.querySelector('[data-filter="hideTestFolders"]');
   if (markdown.checked !== settings.hideMarkdown) markdown.checked = settings.hideMarkdown;
   if (code.checked !== settings.hideCodeComments) code.checked = settings.hideCodeComments;
   if (summary.checked !== settings.hideSummaryComments) summary.checked = settings.hideSummaryComments;
+  if (tests.checked !== settings.hideTestFolders) tests.checked = settings.hideTestFolders;
   const extensions = panel.querySelector('[data-filter="hiddenExtensions"]');
   const text = settings.hiddenExtensions.join(', ');
   if (document.activeElement !== extensions && extensions.value !== text) extensions.value = text;
+  const pattern = panel.querySelector('[data-filter="hidePattern"]');
+  if (document.activeElement !== pattern && pattern.value !== settings.hidePattern) pattern.value = settings.hidePattern;
+  const invalid = settings.hidePattern.trim() !== '' && !compileHidePattern(settings.hidePattern);
+  pattern.setAttribute('aria-invalid', invalid ? 'true' : 'false');
   return panel;
 }
 
@@ -49,14 +55,17 @@ function buildPanel(onChange) {
     <label class="bbrd-check" title="Line comments and block comments"><input type="checkbox" data-filter="hideCodeComments" /> Code comments</label>
     <label class="bbrd-check" title="C# documentation comments and JSDoc blocks"><input type="checkbox" data-filter="hideSummaryComments" /> Summary comments</label>
     <p class="bbrd-hint">JavaScript, TypeScript and C#</p>
-    <label class="bbrd-ext">Extensions <input type="text" data-filter="hiddenExtensions" placeholder="svg, lock, min.js" spellcheck="false" /></label>`;
+    <label class="bbrd-check" title="Folders ending in Tests, such as Foo.Tests and Foo.UnitTests, and every file inside them"><input type="checkbox" data-filter="hideTestFolders" /> Test projects</label>
+    <label class="bbrd-ext">Extensions <input type="text" data-filter="hiddenExtensions" placeholder="svg, lock, min.js" spellcheck="false" /></label>
+    <label class="bbrd-ext">Pattern <input type="text" data-filter="hidePattern" placeholder="\\.Tests|tmp/" spellcheck="false" /></label>
+    <p class="bbrd-hint">Regular expression. Matches the path, a folder, or the file name.</p>`;
   panel.addEventListener('click', (event) => event.stopPropagation());
   panel.addEventListener('keydown', (event) => event.stopPropagation());
   panel.addEventListener('change', (event) => {
     const input = event.target.closest('[data-filter]');
     if (!input) return;
     const key = input.dataset.filter;
-    const value = key === 'hiddenExtensions' ? parseExtensions(input.value) : input.checked;
+    const value = key === 'hiddenExtensions' ? parseExtensions(input.value) : key === 'hidePattern' ? input.value : input.checked;
     onChange(key, value);
   });
   return panel;

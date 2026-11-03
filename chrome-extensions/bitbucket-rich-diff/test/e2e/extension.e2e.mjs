@@ -235,6 +235,27 @@ describe('mock pull request', () => {
     await panel.getByLabel('Markdown files').uncheck();
     assert.equal(await article('README.md').isVisible(), true);
     assert.equal(await article('assets/logo.svg').isVisible(), true);
+
+    await panel.getByLabel('Test projects').check();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), false);
+    assert.equal(await article('src/Payment.UnitTests/FlowTests.cs').isVisible(), false);
+    assert.equal(await page.locator('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').isVisible(), false);
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    await panel.getByLabel('Test projects').uncheck();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
+
+    const pattern = panel.locator('[data-filter="hidePattern"]');
+    await pattern.fill('\\.svg$');
+    await pattern.blur();
+    assert.equal(await article('assets/logo.svg').isVisible(), false);
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    await pattern.fill('[');
+    await pattern.blur();
+    assert.equal(await pattern.getAttribute('aria-invalid'), 'true');
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    await pattern.fill('');
+    await pattern.blur();
+    assert.equal(await article('assets/logo.svg').isVisible(), true);
   });
 
   it('hides code comments and summary comments in JavaScript and C# diffs', async () => {

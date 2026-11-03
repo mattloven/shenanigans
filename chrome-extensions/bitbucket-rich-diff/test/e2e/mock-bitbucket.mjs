@@ -26,6 +26,8 @@ export const MOCK_FILES = [
   { status: 'modified', path: 'src/app.js', old: 'const a = 1;\n', new: 'const a = 2;\n' },
   { status: 'modified', path: 'src/checkout.js', old: read('checkout-old.js'), new: read('checkout-new.js') },
   { status: 'modified', path: 'src/Payment.cs', old: read('payment-old.cs'), new: read('payment-new.cs') },
+  { status: 'added', path: 'src/Payment.Tests/ChargeTests.cs', old: null, new: 'public class ChargeTests {}\n' },
+  { status: 'added', path: 'src/Payment.UnitTests/FlowTests.cs', old: null, new: 'public class FlowTests {}\n' },
   { status: 'modified', path: 'assets/logo.svg', old: '<svg></svg>\n', new: '<svg id="logo"></svg>\n' },
   { status: 'modified', path: 'config/broken.json', old: '{"a": 1}\n', new: '{"a": 1,,}\n' },
 ];

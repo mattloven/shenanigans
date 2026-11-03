@@ -11,6 +11,8 @@ import { parseExtensions } from './file-filter.js';
  * @property {string[]} hiddenExtensions    extra extensions to hide, e.g. [".svg", ".lock"]
  * @property {boolean} hideCodeComments     hide line comments and block comments in JS and C# diffs
  * @property {boolean} hideSummaryComments  hide documentation comments (C# triple-slash and JSDoc)
+ * @property {boolean} hideTestFolders      hide folders whose names end in Tests, and everything inside them
+ * @property {string} hidePattern           regular expression matched against the path, each folder, and the file name
  */
 
 /** @typedef {'old' | 'new' | 'split'} PreviewLayout */
@@ -26,6 +28,8 @@ export const DEFAULT_SETTINGS = {
   hiddenExtensions: [],
   hideCodeComments: false,
   hideSummaryComments: false,
+  hideTestFolders: false,
+  hidePattern: '',
 };
 
 export const PREVIEW_LAYOUTS = ['old', 'new', 'split'];
@@ -49,6 +53,8 @@ export function normalizeSettings(stored) {
     hiddenExtensions: parseExtensions(s.hiddenExtensions ?? []),
     hideCodeComments: typeof s.hideCodeComments === 'boolean' ? s.hideCodeComments : DEFAULT_SETTINGS.hideCodeComments,
     hideSummaryComments: typeof s.hideSummaryComments === 'boolean' ? s.hideSummaryComments : DEFAULT_SETTINGS.hideSummaryComments,
+    hideTestFolders: typeof s.hideTestFolders === 'boolean' ? s.hideTestFolders : DEFAULT_SETTINGS.hideTestFolders,
+    hidePattern: typeof s.hidePattern === 'string' ? s.hidePattern.slice(0, 200) : DEFAULT_SETTINGS.hidePattern,
   };
 }
 
