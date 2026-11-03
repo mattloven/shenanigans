@@ -1,0 +1,141 @@
+:root {
+  color-scheme: light dark;
+  font-family: 'Atlassian Sans', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  color: #292a2e;
+  background: #fff;
+}
+
+body {
+  margin: 0;
+  min-width: 340px;
+}
+
+main {
+  padding: 16px 16px 12px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+h1 {
+  font-size: 16px;
+  font-weight: 650;
+  margin: 0;
+}
+
+.lede {
+  color: #505258;
+  margin: 4px 0 14px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+fieldset {
+  border: 0;
+  border-top: 1px solid #0b120e24;
+  margin: 0 0 4px;
+  padding: 10px 0 6px;
+}
+
+legend {
+  padding: 0 6px 0 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: #505258;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin: 0;
+}
+
+.row input[type='checkbox'] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: none;
+  border: 2px solid #8c8f97;
+  border-radius: 2px;
+  background: #fff;
+  display: grid;
+  place-content: center;
+}
+
+.row input[type='checkbox']:checked {
+  background: #1868db;
+  border-color: #1868db;
+}
+
+.row input[type='checkbox']:checked::after {
+  content: '';
+  width: 8px;
+  height: 5px;
+  border: solid #fff;
+  border-width: 0 0 2px 2px;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+select,
+input[type='text'] {
+  margin-left: auto;
+  height: 32px;
+  padding: 0 8px;
+  border: 2px solid #8c8f97;
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+input[type='text'] {
+  width: 150px;
+  margin-left: auto;
+}
+
+select:focus,
+input[type='text']:focus {
+  border-color: #4688ec;
+  outline: none;
+}
+
+.status {
+  min-height: 1em;
+  margin: 8px 0 0;
+  color: #6b6e76;
+  font-size: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #cecfd2;
+    background: #1f1f21;
+  }
+
+  .lede,
+  legend,
+  .status {
+    color: #a9abaf;
+  }
+
+  fieldset {
+    border-top-color: #ffffff24;
+  }
+
+  .row input[type='checkbox'],
+  select,
+  input[type='text'] {
+    background: #1f1f21;
+    border-color: #7e8188;
+    color: inherit;
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "payments-service",
+  "version": "2.4.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.11.0",
+    "undici": "^6.19.0"
+  },
+  "regions": ["eu-west-1", "us-east-1", "us-west-2", "ap-southeast-2"],
+  "featureFlags": [
+    { "name": "new-checkout", "enabled": true, "rollout": 25 },
+    { "name": "3ds2", "enabled": true, "rollout": 100 }
+  ],
+  "engines": { "node": ">=20" }
+}

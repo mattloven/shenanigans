@@ -1,0 +1,185 @@
+/* Injected into the Bitbucket page. Everything is prefixed to avoid clashing with Bitbucket. */
+
+article[data-bbrd-view]:not([data-bbrd-view='diff']) [data-qa='bk-file__content'] {
+  display: none !important;
+}
+
+.bbrd-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 2px;
+  margin: 0 8px 0 auto;
+  border-radius: 6px;
+  background: var(--ds-background-neutral, #0515240f);
+  flex-shrink: 0;
+  font-family: var(--ds-font-family-body, inherit);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.bbrd-tab {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ds-text-subtle, #505258);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bbrd-tab:hover {
+  background: var(--ds-background-neutral-hovered, #091e4224);
+  color: var(--ds-text, #172b4d);
+}
+
+.bbrd-tab[aria-selected='true'] {
+  background: var(--ds-background-selected, #e9f2fe);
+  color: var(--ds-text-selected, #1868db);
+  box-shadow: none;
+}
+
+.bbrd-tab:focus-visible {
+  outline: 2px solid var(--ds-border-focused, #388bff);
+  outline-offset: 1px;
+}
+
+.bbrd-host[hidden] {
+  display: none !important;
+}
+
+/* File list filters. Flat, like the rest of the sidebar: no card, Atlassian type and controls. */
+
+.bbrd-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 10px;
+  padding: 0;
+  font-family: var(--ds-font-family-body, inherit);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ds-text, #292a2e);
+}
+
+.bbrd-filters-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--ds-text-subtle, #505258);
+}
+
+.bbrd-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin: 0;
+  cursor: pointer;
+  color: var(--ds-text, #292a2e);
+}
+
+.bbrd-check input,
+.bbrd-filters input[type='checkbox'] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: none;
+  border: 2px solid var(--ds-border-input, #8c8f97);
+  border-radius: 2px;
+  background: var(--ds-background-input, #fff);
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+.bbrd-check input:checked {
+  background: var(--ds-background-selected-bold, #1868db);
+  border-color: var(--ds-background-selected-bold, #1868db);
+}
+
+.bbrd-check input:checked::after {
+  content: '';
+  width: 8px;
+  height: 5px;
+  border: solid #fff;
+  border-width: 0 0 2px 2px;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.bbrd-check input:focus-visible {
+  outline: 2px solid var(--ds-border-focused, #4688ec);
+  outline-offset: 2px;
+}
+
+.bbrd-hint,
+.bbrd-hidden-count {
+  margin: 0;
+  color: var(--ds-text-subtlest, #6b6e76);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+}
+
+.bbrd-hint {
+  margin: 0 0 6px 24px;
+}
+
+.bbrd-ext {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ds-text-subtle, #505258);
+}
+
+.bbrd-ext input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 2px solid var(--ds-border-input, #8c8f97);
+  border-radius: 6px;
+  background: var(--ds-background-input, #fff);
+  color: var(--ds-text, #292a2e);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.bbrd-ext input::placeholder {
+  color: var(--ds-text-subtlest, #6b6e76);
+}
+
+.bbrd-ext input:hover {
+  background: var(--ds-background-input-hovered, #f8f8f8);
+}
+
+.bbrd-ext input:focus {
+  border-color: var(--ds-border-focused, #4688ec);
+  outline: none;
+}
+
+.bbrd-file-hidden,
+.bbrd-hide-line {
+  display: none !important;
+}
+
+.bbrd-hide-comment {
+  display: none !important;
+}

@@ -1,0 +1,81 @@
+import { parseExtensions } from './file-filter.js';
+
+/**
+ * @typedef {object} Settings
+ * @property {{ enabled: boolean, defaultView: import('./file-types.js').ViewId }} markdown
+ * @property {{ enabled: boolean, defaultView: import('./file-types.js').ViewId }} json
+ * @property {boolean} showDeletions   show removed text/blocks in the rich diff
+ * @property {boolean} onlyChanges     fold long runs of unchanged content
+ * @property {PreviewLayout} previewLayout  which version(s) the Preview tab shows
+ * @property {boolean} hideMarkdown         hide markdown files in the file list and the diff
+ * @property {string[]} hiddenExtensions    extra extensions to hide, e.g. [".svg", ".lock"]
+ * @property {boolean} hideCodeComments     hide line comments and block comments in JS and C# diffs
+ * @property {boolean} hideSummaryComments  hide documentation comments (C# triple-slash and JSDoc)
+ */
+
+/** @typedef {'old' | 'new' | 'split'} PreviewLayout */
+
+/** @type {Settings} */
+export const DEFAULT_SETTINGS = {
+  markdown: { enabled: true, defaultView: 'changes' },
+  json: { enabled: true, defaultView: 'changes' },
+  showDeletions: true,
+  onlyChanges: false,
+  previewLayout: 'split',
+  hideMarkdown: false,
+  hiddenExtensions: [],
+  hideCodeComments: false,
+  hideSummaryComments: false,
+};
+
+export const PREVIEW_LAYOUTS = ['old', 'new', 'split'];
+
+const VALID_VIEWS = new Set(['diff', 'changes', 'preview']);
+
+/** Merges stored values over defaults, discarding anything malformed. */
+export function normalizeSettings(stored) {
+  const s = stored && typeof stored === 'object' ? stored : {};
+  const type = (key) => ({
+    enabled: typeof s[key]?.enabled === 'boolean' ? s[key].enabled : DEFAULT_SETTINGS[key].enabled,
+    defaultView: VALID_VIEWS.has(s[key]?.defaultView) ? s[key].defaultView : DEFAULT_SETTINGS[key].defaultView,
+  });
+  return {
+    markdown: type('markdown'),
+    json: type('json'),
+    showDeletions: typeof s.showDeletions === 'boolean' ? s.showDeletions : DEFAULT_SETTINGS.showDeletions,
+    onlyChanges: typeof s.onlyChanges === 'boolean' ? s.onlyChanges : DEFAULT_SETTINGS.onlyChanges,
+    previewLayout: PREVIEW_LAYOUTS.includes(s.previewLayout) ? s.previewLayout : DEFAULT_SETTINGS.previewLayout,
+    hideMarkdown: typeof s.hideMarkdown === 'boolean' ? s.hideMarkdown : DEFAULT_SETTINGS.hideMarkdown,
+    hiddenExtensions: parseExtensions(s.hiddenExtensions ?? []),
+    hideCodeComments: typeof s.hideCodeComments === 'boolean' ? s.hideCodeComments : DEFAULT_SETTINGS.hideCodeComments,
+    hideSummaryComments: typeof s.hideSummaryComments === 'boolean' ? s.hideSummaryComments : DEFAULT_SETTINGS.hideSummaryComments,
+  };
+}
+
+const STORAGE_KEY = 'settings';
+
+function storageArea() {
+  return globalThis.chrome?.storage?.sync ?? null;
+}
+
+/** @returns {Promise<Settings>} */
+export async function loadSettings() {
+  const area = storageArea();
+  if (!area) return normalizeSettings(null);
+  const data = await area.get(STORAGE_KEY);
+  return normalizeSettings(data[STORAGE_KEY]);
+}
+
+export async function saveSettings(settings) {
+  const area = storageArea();
+  if (!area) return;
+  await area.set({ [STORAGE_KEY]: normalizeSettings(settings) });
+}
+
+export function onSettingsChanged(callback) {
+  const events = globalThis.chrome?.storage?.onChanged;
+  if (!events) return;
+  events.addListener((changes, areaName) => {
+    if (areaName === 'sync' && changes[STORAGE_KEY]) callback(normalizeSettings(changes[STORAGE_KEY].newValue));
+  });
+}
