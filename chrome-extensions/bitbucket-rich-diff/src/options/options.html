@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Bitbucket Rich Diff</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="icons/icon-32.png" alt="" width="24" height="24" />
+        <h1>Bitbucket Rich Diff</h1>
+      </header>
+      <p class="lede">Adds <strong>Diff · Rich diff · Preview</strong> tabs to Markdown and JSON files in pull requests.</p>
+
+      <form id="settings">
+        <fieldset>
+          <legend>Markdown (.md)</legend>
+          <label class="row"><input type="checkbox" name="markdown.enabled" /> Add tabs to Markdown files</label>
+          <label class="row">
+            Open files in
+            <select name="markdown.defaultView">
+              <option value="diff">Diff</option>
+              <option value="changes">Rich diff</option>
+              <option value="preview">Preview</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>JSON (.json, .jsonc)</legend>
+          <label class="row"><input type="checkbox" name="json.enabled" /> Add tabs to JSON files</label>
+          <label class="row">
+            Open files in
+            <select name="json.defaultView">
+              <option value="diff">Diff</option>
+              <option value="changes">Rich diff</option>
+              <option value="preview">Tree</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Rich diff</legend>
+          <label class="row"><input type="checkbox" name="showDeletions" /> Show deletions (struck through)</label>
+          <label class="row"><input type="checkbox" name="onlyChanges" /> Only changes (fold unchanged sections)</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>File list</legend>
+          <label class="row"><input type="checkbox" name="hideMarkdown" /> Hide .md files</label>
+          <label class="row">
+            Hide extensions
+            <input type="text" name="hiddenExtensions" placeholder=".svg, .lock, .min.js" spellcheck="false" />
+          </label>
+          <label class="row"><input type="checkbox" name="hideCodeComments" /> Hide code comments (JS, TS, C#)</label>
+          <label class="row"><input type="checkbox" name="hideSummaryComments" /> Hide summary comments (/// and /** */)</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Preview</legend>
+          <label class="row">
+            Show
+            <select name="previewLayout">
+              <option value="split">Old and new side by side</option>
+              <option value="new">New version only</option>
+              <option value="old">Old version only</option>
+            </select>
+          </label>
+        </fieldset>
+      </form>
+      <p class="status" id="status" role="status"></p>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>
