@@ -4,10 +4,11 @@
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { installMockBitbucket, MOCK_PR_URL } from '../test/e2e/mock-bitbucket.mjs';
 
-const root = path.resolve(import.meta.dirname, '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = path.join(root, 'tmp/live');
 fs.mkdirSync(shotsDir, { recursive: true });
 

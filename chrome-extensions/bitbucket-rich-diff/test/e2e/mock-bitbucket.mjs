@@ -6,9 +6,11 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { structuredPatch } from 'diff';
 
-const fixtures = path.resolve(import.meta.dirname, '../fixtures');
+const here = path.dirname(fileURLToPath(import.meta.url));
+const fixtures = path.resolve(here, '../fixtures');
 const read = (name) => fs.readFileSync(path.join(fixtures, name), 'utf8');
 
 export const MOCK_PR_URL = 'https://bitbucket.org/acme/payments/pull-requests/42/diff';
@@ -118,7 +120,7 @@ function side(file, which) {
 
 /** @param {import('playwright-core').BrowserContext} context */
 export async function installMockBitbucket(context, { onApiRequest } = {}) {
-  const png = fs.readFileSync(path.resolve(import.meta.dirname, '../../assets/icons/icon-128.png'));
+  const png = fs.readFileSync(path.resolve(here, '../../assets/icons/icon-128.png'));
   await context.route(/^https:\/\/bitbucket\.org\/acme\/payments\/pull-requests\/42/, (route) =>
     route.fulfill({ status: 200, contentType: 'text/html', body: pageHtml() }),
   );

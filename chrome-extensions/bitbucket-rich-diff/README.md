@@ -17,16 +17,32 @@ See [SPEC.md](SPEC.md) for the full behaviour and design.
 
 ## Install (unpacked)
 
+Run these commands from this directory (`chrome-extensions/bitbucket-rich-diff`), not from the root of the shenanigans repo. The repo root has no `package.json`, so `npm install` and `npm run build` there cannot build this extension.
+
+You need Node.js 22 LTS (20.19 or newer also works for the build).
+
 ```bash
 npm install
 npm run build
 ```
 
+On Windows, from PowerShell, after cloning:
+
+```powershell
+cd D:\Code\mattloven\shenanigans\chrome-extensions\bitbucket-rich-diff
+npm install
+npm run build
+```
+
+`npm install` for this package reports **0 vulnerabilities**. A count of 29 means npm ran against a different `package.json` than this folder. `npm run build` only bundles with esbuild. The test tools (`vitest`, `jsdom`, `playwright-core`) are not part of the extension you load into Chrome.
+
 1. Open `chrome://extensions` and turn on **Developer mode**.
-2. Click **Load unpacked** and select the `dist/` folder.
+2. Click **Load unpacked** and select the `dist/` folder created above.
 3. Open any pull request on bitbucket.org and go to **Files changed**.
 
 Settings are in the extension's toolbar popup.
+
+If the build says `@esbuild/win32-x64` could not be found, delete `node_modules` and run `npm install` again in this folder so npm can fetch the Windows esbuild binary.
 
 ## Develop
 

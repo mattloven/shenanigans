@@ -7,10 +7,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { installMockBitbucket, MOCK_PR_URL, NEW_COMMIT } from './mock-bitbucket.mjs';
 
-const root = path.resolve(import.meta.dirname, '../..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const dist = path.join(root, 'dist');
 const results = path.join(root, 'test-results');
 fs.mkdirSync(results, { recursive: true });

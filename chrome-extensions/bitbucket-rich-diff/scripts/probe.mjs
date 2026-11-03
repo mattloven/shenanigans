@@ -3,8 +3,9 @@ import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(import.meta.dirname, '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [url, expression] = [process.argv[2], process.argv[3]];
 const context = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'bbrd-')), {
   channel: 'chromium',
