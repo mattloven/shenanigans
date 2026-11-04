@@ -10,16 +10,16 @@ export function isTestFile(path) {
   const segments = String(path).split(/[\\/]/).filter(Boolean);
   const name = segments[segments.length - 1] ?? '';
   if (segments.slice(0, -1).some((segment) => TEST_FOLDER.test(segment))) return true;
-  if (/\\.(?:test|spec)\\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(name)) return true;
-  if (/(?:Tests?|Specs?)\\.cs$/i.test(name)) return true;
+  if (/\.(?:test|spec)\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(name)) return true;
+  if (/(?:Tests?|Specs?)\.cs$/i.test(name)) return true;
   return false;
 }
 
-const JS_HEADER = /^\\s*(?:describe|it|test|fit|xit|it\\.each|test\\.each|it\\.only|test\\.only)\\s*\\(\\s*(['"`])([^'"`]*)\\1/;
-const CS_ATTR = /\\[(Fact|Theory|TestMethod|Test|TestCase)\\b([^\\]]*)\\]/;
-const DISPLAY_NAME = /DisplayName\\s*=\\s*\"([^\"]*)\"/;
-const METHOD_NAME = /\\b([A-Za-z_]\\w*)\\s*\\(/;
-const DECLARATION = /^\\s*(?:public|private|protected|internal)\\b/;
+const JS_HEADER = /^\s*(?:describe|it|test|fit|xit|it\.each|test\.each|it\.only|test\.only)\s*\(\s*(['"`])([^'"`]*)\1/;
+const CS_ATTR = /\[(Fact|Theory|TestMethod|Test|TestCase)\b([^\]]*)\]/;
+const DISPLAY_NAME = /DisplayName\s*=\s*"([^"]*)"/;
+const METHOD_NAME = /\b([A-Za-z_]\w*)\s*\(/;
+const DECLARATION = /^\s*(?:public|private|protected|internal)\b/;
 
 /**
  * @param {string} text
@@ -28,7 +28,7 @@ const DECLARATION = /^\\s*(?:public|private|protected|internal)\\b/;
 function jsTitle(text) {
   const match = text.match(JS_HEADER);
   if (!match) return null;
-  if (/^describe\\b/.test(text.trim())) return null;
+  if (/^describe\b/.test(text.trim())) return null;
   return match[2] || 'test';
 }
 
