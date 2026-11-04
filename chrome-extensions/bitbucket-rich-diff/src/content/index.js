@@ -1,9 +1,10 @@
 import { detectFileType } from '../core/file-types.js';
 import { loadSettings, onSettingsChanged, saveSettings } from '../core/settings.js';
 import { createCloudClient, findFileDiffs, getFilePath, parsePrUrl, prKey } from '../platform/bitbucket-cloud.js';
-import { updateCommentMasks } from './comment-mask.js';
+import { commentOnlyPaths, updateCommentMasks } from './comment-mask.js';
 import { FileView } from './file-view.js';
-import { mountFileFilters } from './file-filters.js';
+import { mountFileFilters, resetHiddenReveal } from './file-filters.js';
+import { mountTestOutlines } from './test-outline.js';
 import { PrContext } from './pr-context.js';
 
 /**
@@ -61,11 +62,13 @@ export class RichDiffApp {
   scan() {
     const pr = parsePrUrl(this.location.href);
     if (!pr) {
+      resetHiddenReveal();
       if (this.views.size) this.stop();
       this.context = null;
       return;
     }
     if (!this.context || prKey(this.context.pr) !== prKey(pr)) {
+      resetHiddenReveal();
       for (const view of this.views.values()) view.destroy();
       this.views.clear();
       this.context = new PrContext(pr, this.client, this.location.origin);
@@ -97,8 +100,9 @@ export class RichDiffApp {
   }
 
   applyPageFilters() {
-    mountFileFilters(this.root, this.settings, (key, value) => this.persistSetting(key, value));
     updateCommentMasks(this.root, this.settings);
+    mountFileFilters(this.root, this.settings, (key, value) => this.persistSetting(key, value), commentOnlyPaths(this.root));
+    mountTestOutlines(this.root);
   }
 
   persistSetting(key, value) {
