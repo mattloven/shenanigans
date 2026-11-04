@@ -12,6 +12,9 @@ import { parseExtensions } from './file-filter.js';
  * @property {boolean} hideCodeComments     hide line comments and block comments in JS and C# diffs
  * @property {boolean} hideSummaryComments  hide documentation comments (C# triple-slash and JSDoc)
  * @property {boolean} hideTestFolders      hide folders whose names end in Tests, and everything inside them
+ * @property {boolean} hideProjects         hide solution and MSBuild project files
+ * @property {boolean} hideGenerated        hide lockfiles, minified files and generated source
+ * @property {boolean} hideCommentFiles     hide files whose entire diff is comments
  * @property {string} hidePattern           regular expression matched against the path, each folder, and the file name
  */
 
@@ -29,6 +32,9 @@ export const DEFAULT_SETTINGS = {
   hideCodeComments: false,
   hideSummaryComments: false,
   hideTestFolders: false,
+  hideProjects: false,
+  hideGenerated: false,
+  hideCommentFiles: false,
   hidePattern: '',
 };
 
@@ -54,6 +60,9 @@ export function normalizeSettings(stored) {
     hideCodeComments: typeof s.hideCodeComments === 'boolean' ? s.hideCodeComments : DEFAULT_SETTINGS.hideCodeComments,
     hideSummaryComments: typeof s.hideSummaryComments === 'boolean' ? s.hideSummaryComments : DEFAULT_SETTINGS.hideSummaryComments,
     hideTestFolders: typeof s.hideTestFolders === 'boolean' ? s.hideTestFolders : DEFAULT_SETTINGS.hideTestFolders,
+    hideProjects: typeof s.hideProjects === 'boolean' ? s.hideProjects : DEFAULT_SETTINGS.hideProjects,
+    hideGenerated: typeof s.hideGenerated === 'boolean' ? s.hideGenerated : DEFAULT_SETTINGS.hideGenerated,
+    hideCommentFiles: typeof s.hideCommentFiles === 'boolean' ? s.hideCommentFiles : DEFAULT_SETTINGS.hideCommentFiles,
     hidePattern: typeof s.hidePattern === 'string' ? s.hidePattern.slice(0, 200) : DEFAULT_SETTINGS.hidePattern,
   };
 }
