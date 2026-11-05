@@ -298,4 +298,96 @@ function ensureSection(panel, settings, onChange) {
   if (select instanceof HTMLSelectElement) paintWorkflowPick(select, settings);
   section.querySelector('.bbrd-workflow-panel')?.remove();
   const edit = section.querySelector('.bbrd-workflow-edit');
-  if (edit in
+  if (edit instanceof HTMLButtonElement) {
+    edit.textContent = 'Edit';
+    edit.setAttribute('aria-expanded', editorOpen ? 'true' : 'false');
+  }
+  ensureDialog(panel.ownerDocument, settings, onChange);
+  return section;
+}
+
+/**
+ * @param {Document} doc
+ * @param {{ reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], reviewFilters?: import('../core/review-workflows.js').ReviewFilter[], activeReviewWorkflow?: string }} settings
+ * @param {WorkflowChange | null} onChange
+ */
+function ensureDialog(doc, settings, onChange) {
+  let backdrop = doc.querySelector('.bbrd-dialog-backdrop');
+  if (!editorOpen) {
+    backdrop?.remove();
+    return;
+  }
+  if (!backdrop) {
+    backdrop = doc.createElement('div');
+    backdrop.className = 'bbrd-dialog-backdrop';
+    backdrop.innerHTML = [
+      '<div class="bbrd-dialog" role="dialog" aria-modal="true" aria-labelledby="bbrd-dialog-title">',
+      '<div class="bbrd-dialog-head">',
+      '<div class="bbrd-dialog-titles"><h2 id="bbrd-dialog-title">Edit workflow</h2><p class="bbrd-dialog-subtitle"></p></div>',
+      '<button type="button" class="bbrd-dialog-close" aria-label="Close">×</button>',
+      '</div>',
+      '<div class="bbrd-dialog-body"></div>',
+      '<div class="bbrd-dialog-foot"><button type="button" class="bbrd-dialog-done">Done</button></div>',
+      '</div>',
+    ].join('');
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) closeWorkflowDialog(doc);
+    });
+    backdrop.querySelector('.bbrd-dialog-close')?.addEventListener('click', () => closeWorkflowDialog(doc));
+    backdrop.querySelector('.bbrd-dialog-done')?.addEventListener('click', () => closeWorkflowDialog(doc));
+    doc.body.append(backdrop);
+    backdrop.querySelector('.bbrd-dialog-done')?.focus();
+  }
+  const state = normalizeWorkflowState(settings.reviewWorkflows, settings.activeReviewWorkflow, settings.reviewFilters);
+  const workflow = state.reviewWorkflows.find((item) => item.id === state.activeReviewWorkflow) ?? state.reviewWorkflows[0];
+  const subtitle = backdrop.querySelector('.bbrd-dialog-subtitle');
+  if (subtitle) subtitle.textContent = workflow?.name ?? '';
+  const body = backdrop.querySelector('.bbrd-dialog-body');
+  if (body instanceof HTMLElement && onChange) mountWorkflowEditor(body, settings, onChange);
+}
+
+/** @param {Document} doc */
+function closeWorkflowDialog(doc) {
+  editorOpen = false;
+  doc.querySelector('.bbrd-dialog-backdrop')?.remove();
+  const edit = doc.querySelector('.bbrd-workflow-edit');
+  if (edit instanceof HTMLButtonElement) edit.setAttribute('aria-expanded', 'false');
+}
+
+/**
+ * @param {HTMLSelectElement} select
+ * @param {{ reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], activeReviewWorkflow?: string }} settings
+ */
+function paintWorkflowPick(select, settings) {
+  const state = normalizeWorkflowState(settings.reviewWorkflows, settings.activeReviewWorkflow);
+  const signature = `${state.reviewWorkflows.map((item) => `${item.id}\t${item.name}`).join('\n')}\n${state.activeReviewWorkflow}`;
+  if (select.dataset.signature === signature) return;
+  select.dataset.signature = signature;
+  select.replaceChildren();
+  for (const workflow of state.reviewWorkflows) {
+    const option = select.ownerDocument.createElement('option');
+    option.value = workflow.id;
+    option.textContent = workflow.name;
+    select.append(option);
+  }
+  select.value = state.activeReviewWorkflow;
+}
+
+/** @param {Document} doc */
+function ensureWorkflowOpen(doc) {
+  if (wiredDocs.has(doc)) return;
+  wiredDocs.add(doc);
+  doc.addEventListener('bbrd-edit-workflow', () => {
+    editorOpen = true;
+    if (!lastMount) return;
+    mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
+  });
+  doc.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && editorOpen) closeWorkflowDialog(doc);
+  });
+}
+
+/** @param {Element} item */
+function readLines(item) {
+  let added = 0;
+  let remo
