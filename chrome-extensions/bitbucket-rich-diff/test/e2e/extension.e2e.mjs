@@ -171,6 +171,8 @@ describe('mock pull request', () => {
   it('supports keyboard navigation between tabs', async () => {
     const readme = article('README.md');
     await readme.locator('.bbrd-tab[data-view="changes"]').focus();
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await readme.getAttribute('data-bbrd-view'), 'changes');
     await page.keyboard.press('ArrowRight');
     assert.equal(await readme.getAttribute('data-bbrd-view'), 'preview');
     await page.keyboard.press('ArrowLeft');
@@ -215,4 +217,103 @@ describe('mock pull request', () => {
     assert.equal(await article('docs/legacy.md').locator('.bbrd-blk--del h1').textContent(), 'Legacy');
     await article('docs/legacy.md').locator('.bbrd-tab[data-view="preview"]').click();
     assert.equal(await article('docs/legacy.md').locator('.markdown-body h1').textContent(), 'Legacy');
-    assert.equal(await article('docs/legacy.md').locator('.seg-btn[aria-checked="true"]').te
+    assert.equal(await article('docs/legacy.md').locator('.seg-btn[aria-checked="true"]').textContent(), 'Old');
+    const broken = article('config/broken.json');
+    assert.match(await broken.locator('.bbrd-error').textContent(), /new version is not valid JSON/);
+    await broken.locator('[data-action="show-diff"]').click();
+    assert.equal(await broken.getAttribute('data-bbrd-view'), 'diff');
+  });
+
+  it('hides markdown and chosen extensions from the file list and the diff', async () => {
+    assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.sidebar .bbrd-filters').count(), 0);
+    assert.equal(await page.locator('.bbrd-stats-actions .bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.diff-bar .bbrd-menu-host').count(), 0);
+    const panel = await openHideMenu();
+    await panel.getByLabel('Markdown files').check();
+    assert.equal(await article('README.md').isVisible(), false);
+    assert.equal(await article('docs/onboarding.md').isVisible(), false);
+    assert.equal(await page.locator('a[href="#chg-README.md"]').isVisible(), false);
+    assert.equal(await article('package.json').isVisible(), true);
+    assert.match(await panel.locator('.bbrd-hidden-count').textContent(), /hidden/);
+
+    const extensions = panel.locator('[data-filter="hiddenExtensions"]');
+    await extensions.fill('.svg');
+    await extensions.blur();
+    assert.equal(await article('assets/logo.svg').isVisible(), false);
+    assert.equal(await page.locator('a[href="#chg-src/checkout.js"]').isVisible(), true);
+    await shot('mock-file-list-hidden', panel);
+
+    await extensions.fill('');
+    await extensions.blur();
+    await panel.getByLabel('Markdown files').uncheck();
+    assert.equal(await article('README.md').isVisible(), true);
+    assert.equal(await article('assets/logo.svg').isVisible(), true);
+
+    const viewed = page.locator('[data-qa="files-viewed-count"]');
+    const changed = page.locator('[data-qa="files-changed-count"]');
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+    assert.equal(await changed.textContent(), '14 files changed');
+
+    await panel.getByLabel('Test projects').check();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), false);
+    assert.equal(await article('src/Payment.UnitTests/FlowTests.cs').isVisible(), false);
+    assert.equal(await page.locator('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').isVisible(), false);
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    const folderNamed = (name) => page.locator('#file-list button').filter({ has: page.locator('.dirname', { hasText: new RegExp(`^${name}$`) }) });
+    const testsFolder = folderNamed('Payment\\.Tests');
+    assert.equal(await testsFolder.locator('.bbrd-hidden-pill').textContent(), 'Hidden');
+    assert.equal(await folderNamed('Payment\\.UnitTests').locator('.bbrd-hidden-pill').count(), 1);
+    assert.equal(await folderNamed('src').locator('.bbrd-hidden-pill').count(), 0);
+    assert.equal(await page.locator('.bbrd-hidden-bar').count(), 0);
+    assert.equal(await page.locator('#file-list .bbrd-hidden-toggle').count(), 0);
+    assert.match(await panel.locator('.bbrd-hidden-count').textContent(), /tests/);
+    assert.equal(await viewed.textContent(), '0 of 12 viewed · 14 files');
+    assert.equal(await changed.textContent(), '12 of 14 files changed');
+    await panel.getByRole('button', { name: 'Show hidden files' }).click();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
+    assert.equal(await page.locator('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').locator('..').locator('.bbrd-cat').textContent(), 'Tests');
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+    assert.equal(await changed.textContent(), '14 files changed');
+    await openHideMenu();
+    await panel.getByRole('button', { name: 'Hide hidden files' }).click();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), false);
+    assert.equal(await viewed.textContent(), '0 of 12 viewed · 14 files');
+    await openHideMenu();
+    await panel.getByLabel('Test projects').uncheck();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
+    assert.equal(await testsFolder.locator('.bbrd-hidden-pill').count(), 0);
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+    assert.equal(await changed.textContent(), '14 files changed');
+
+    await panel.getByLabel('Solution and project files').check();
+    assert.equal(await article('Payment.sln').isVisible(), false);
+    assert.equal(await article('src/Payment.csproj').isVisible(), false);
+    assert.match(await panel.locator('.bbrd-hidden-count').textContent(), /project/);
+    assert.equal(await viewed.textContent(), '0 of 12 viewed · 14 files');
+    assert.equal(await changed.textContent(), '12 of 14 files changed');
+    await panel.getByLabel('Solution and project files').uncheck();
+    assert.equal(await article('Payment.sln').isVisible(), true);
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+
+    await panel.getByLabel('Generated files').check();
+    assert.equal(await article('pnpm-lock.yaml').isVisible(), false);
+    await panel.getByLabel('Generated files').uncheck();
+    assert.equal(await article('pnpm-lock.yaml').isVisible(), true);
+
+    const pattern = panel.locator('[data-filter="hidePattern"]');
+    await pattern.fill('\\.svg$');
+    await pattern.blur();
+    assert.equal(await article('assets/logo.svg').isVisible(), false);
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    await pattern.fill('[');
+    await pattern.blur();
+    assert.equal(await pattern.getAttribute('aria-invalid'), 'true');
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    await pattern.fill('');
+    await pattern.blur();
+    assert.equal(await article('assets/logo.svg').isVisible(), true);
+  });
+
+  it('keeps a single hide menu when the diff toolbar is re-rendered', async () => {
+  
