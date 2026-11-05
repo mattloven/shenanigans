@@ -99,4 +99,51 @@ same on the other. A parse error affects only its own pane.
 
 A **Hide** button sits in the top right of the summary bar above the file tree and the diff. It opens one menu. The same controls are in the extension settings:
 
-- **Hide .md files.** Also hides `.markdown`, `.mdown`, `.mkd` a
+- **Hide .md files.** Also hides `.markdown`, `.mdown`, `.mkd` and `.mkdn`. The file disappears from the list and from the diff.
+- **Hide extensions.** A text field such as `.svg, .lock, .min.js`. A file matches when its path ends with one of those suffixes.
+- **Hide test projects.** Hides every file inside a folder whose name ends in `Tests`, such as `Foo.Tests`, `Foo.UnitTests` and `Foo.IntegrationTests`.
+- **Hide solution and project files.** `.sln`, `.slnx`, `.slnf`, and every MSBuild project type (`.csproj`, `.fsproj`, `.vbproj`, `.vcxproj`, and the rest of `*proj`).
+- **Hide generated files.** Lockfiles, `*.min.js`, `*.min.css`, and generated C# such as `*.Designer.cs` and `*.g.cs`.
+- **Hide comment-only files.** A file whose added and removed lines are all comments.
+- **Hide pattern.** A regular expression tested against the full path, each folder name, and the file name. An invalid pattern hides nothing.
+- Hidden files stay in the page. The Hide flyout (opened from the summary bar) shows the breakdown — how many files, which category, and the `+ −` counts — at the bottom of the menu, with **Show** / **Hide** to bring them back for this visit. Nothing is inserted into the file tree for that summary: Bitbucket re-renders the sidebar and would duplicate any node we add there. A folder these rules hide keeps its **Hidden** pill, and a revealed file keeps its category pill. Both sit in front of the folder or file icon, on the same row. Each kind has its own colour: tests purple, projects teal, generated orange, docs green, comments grey, extensions yellow, pattern red, and Hidden blue.
+- **💩 Betterer Bit Bucket** is a summary bar on the Files changed page, directly above the file tree and the diff. It is not a pull request tab. It shows files, lines added (green) and removed (red), markdown files, test files and the tests inside them, project files, generated files, and review comments. The line totals are copied from Bitbucket's **Lines updated** figure in the file tree. The markdown tile reads `N` and **Markdown file** or **Markdown files**. The comment tile reads **Unresolved Comments (N)** and **Resolved Comments (N)** from the comments dropdown and shows `resolved / total resolved`. When the unresolved count is 0, the comments tile shows a green tick. Those headings are removed when the dropdown closes, so the last pair is kept until the unresolved total changes. Per-file comment phrases in the tree are not the total. The Hide button is aligned to the top right of this bar.
+- While files are hidden, Bitbucket's counters keep both numbers: actual (original total minus hidden) and the real total stored on the node the first time we see it. `0 of 14 files viewed` becomes `0 of 12 viewed · 14 files`, and `14 files changed` becomes `12 of 14 files changed`. The viewed numerator counts only files still showing. **Show**, or clearing the rule, restores the original text exactly.
+- Opening a test file collapses each test to its name and its own `+ −`. Click the title to read that test.
+- The menu reports how many files are hidden.
+
+### Code comments in diffs
+
+For JavaScript, TypeScript (`.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, `.cts`) and C# (`.cs`):
+
+- **Hide code comments** removes `//` line comments and `/* … */` block comments.
+- **Hide summary comments** removes documentation comments: `///` XML docs in C#, and `/** … */` JSDoc blocks in both languages. A `/***` banner stays a normal block comment.
+- A run of lines that are only hidden comments collapses to a "N comment lines" row. Click it to read them. A trailing comment is removed and the code in front of it stays.
+- Text inside strings, template literals, C# verbatim and interpolated strings, character literals and JavaScript regexes is left alone. `http://…` inside a string is not treated as a comment.
+- Removed and added lines are read as two separate files, because a diff interleaves them. A context line is hidden only when both sides agree it is a hidden comment.
+- In side-by-side view each column is masked on its own, so an added comment can disappear while the code it replaced stays visible.
+- Comment state carries across the visible lines of a hunk. A block comment that opened in a collapsed part of the file can be missed; expanding the hunk and toggling the option again rescans.
+
+### Settings (popup and options page, synced through `chrome.storage.sync`)
+
+- Per file type: enable tabs, and the default tab.
+- Show deletions, Only changes, Preview layout.
+- Hide .md files, extra extensions, test projects, a hide pattern, hide code comments, hide summary comments.
+- Toolbar toggles and the layout switch write the same settings, and every open file and tab
+  updates immediately.
+
+## Architecture
+
+```
+src/
+  core/                 pure logic, no Bitbucket knowledge (unit tested)
+    markdown.js         markdown-it setup (GFM tables, task lists, linkify), URL rewriting, block splitting
+    align.js            sequence alignment: key diff plus similarity pairing (Needleman–Wunsch)
+    html-diff.js        word-level HTML diff that preserves markup
+    markdown-diff.js    track-changes renderer and section alignment for side-by-side preview
+    json-diff.js        tolerant parse, structural diff tree, change list
+    json-render.js      tree, summary, and plain tree rendering
+    file-types.js       extension to type, and tab definitions
+    settings.js         defaults, validation, chrome.storage wrapper
+  platform/
+    bitbucket-cloud.js  PR URL parsing, REST client, URL resolver, DOM sele
