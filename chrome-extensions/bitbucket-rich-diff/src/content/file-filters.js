@@ -173,4 +173,77 @@ function buildPanel() {
     <label class="bbrd-check" title="A file whose only changes are comments"><input type="checkbox" data-filter="hideCommentFiles" /> Comment-only files</label>
     <label class="bbrd-ext">Extensions <input type="text" data-filter="hiddenExtensions" placeholder="svg, lock, min.js" spellcheck="false" /></label>
     <label class="bbrd-ext">Pattern <input type="text" data-filter="hidePattern" placeholder="\\.Tests|tmp/" spellcheck="false" /></label>
-    <p class="bbrd-hint">Regu
+    <p class="bbrd-hint">Regular expression. Matches the path, a folder, or the file name.</p>
+    <div class="bbrd-filters-foot" hidden>
+      <span class="bbrd-hidden-count" aria-live="polite"></span>
+      <button type="button" class="bbrd-hidden-toggle" hidden>Show</button>
+    </div>`;
+  panel.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const opener = event.target.closest('.bbrd-workflow-open');
+    if (opener && panel.contains(opener)) {
+      event.preventDefault();
+      closeMenu(panel.ownerDocument);
+      panel.ownerDocument.dispatchEvent(new CustomEvent('bbrd-edit-workflow'));
+      return;
+    }
+    const toggle = event.target.closest('.bbrd-hidden-toggle');
+    if (!toggle || !panel.contains(toggle)) return;
+    event.preventDefault();
+    revealed = !revealed;
+    const last = lastApply;
+    if (last) mountFileFilters(last.root, last.settings, last.onChange, last.commentOnly);
+  });
+  panel.addEventListener('keydown', (event) => event.stopPropagation());
+  panel.addEventListener('change', (event) => {
+    const workflow = event.target.closest('[data-workflow]');
+    if (workflow instanceof HTMLSelectElement && panel.contains(workflow)) {
+      changeHandlers.get(panel)?.('activeReviewWorkflow', workflow.value);
+      return;
+    }
+    const input = event.target.closest('[data-filter]');
+    if (!input) return;
+    const key = input.dataset.filter;
+    const value = key === 'hiddenExtensions' ? parseExtensions(input.value) : key === 'hidePattern' ? input.value : input.checked;
+    if (key === 'hideSummaryComments') lockCollapse(panel, input.checked);
+    changeHandlers.get(panel)?.(key, value);
+  });
+  return panel;
+}
+
+function ensureDismiss(doc) {
+  if (wiredDocuments.has(doc)) return;
+  wiredDocuments.add(doc);
+  doc.addEventListener('pointerdown', (event) => {
+    const panel = doc.getElementById('bbrd-hide-menu');
+    const host = doc.querySelector('.bbrd-menu-host');
+    if (!panel || panel.hidden) return;
+    const target = event.target;
+    if (target instanceof Node && (host?.contains(target) || panel.contains(target))) return;
+    closeMenu(doc);
+  }, true);
+  doc.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const panel = doc.getElementById('bbrd-hide-menu');
+    if (!panel || panel.hidden) return;
+    event.stopPropagation();
+    closeMenu(doc);
+  }, true);
+  doc.defaultView?.addEventListener('resize', () => reposition(doc));
+  doc.addEventListener('scroll', () => reposition(doc), true);
+}
+
+function openMenu(doc) {
+  const host = doc.querySelector('.bbrd-menu-host');
+  const panel = doc.getElementById('bbrd-hide-menu');
+  if (!host || !panel) return;
+  panel.hidden = false;
+  host.querySelector('.bbrd-menu-button')?.setAttribute('aria-expanded', 'true');
+  placeMenu(host, panel);
+}
+
+function closeMenu(doc) {
+  const panel = doc.getElementById('bbrd-hide-menu');
+  if (!panel || panel.hidden) return;
+  panel.hidden = true;
+  doc.querySelector('.bbrd-menu-button')?.setAttribute('aria-exp
