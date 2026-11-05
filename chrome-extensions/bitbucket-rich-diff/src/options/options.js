@@ -1,3 +1,4 @@
+import { mountWorkflowEditor } from '../content/workflow-editor.js';
 import { parseExtensions } from '../core/file-filter.js';
 import { loadSettings, saveSettings } from '../core/settings.js';
 
@@ -25,8 +26,20 @@ async function init() {
     }
   }
   lockCollapse(settings.hideSummaryComments);
+  const workflows = document.getElementById('workflows');
+  if (workflows instanceof HTMLElement) {
+    mountWorkflowEditor(workflows, settings, async (patch) => {
+      settings.reviewFilters = patch.reviewFilters;
+      settings.reviewWorkflows = patch.reviewWorkflows;
+      settings.activeReviewWorkflow = patch.activeReviewWorkflow;
+      await saveSettings(settings);
+      status.textContent = 'Saved — open pull requests update automatically.';
+    });
+  }
+  form.addEventListener('submit', (event) => event.preventDefault());
   form.addEventListener('change', async (e) => {
     const el = e.target;
+    if (!el.name) return;
     const value = el.name === 'hiddenExtensions' ? parseExtensions(el.value) : el.type === 'checkbox' ? el.checked : el.value;
     write(settings, el.name, value);
     if (settings.hideSummaryComments) {
