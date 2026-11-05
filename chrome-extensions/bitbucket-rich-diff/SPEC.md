@@ -118,7 +118,9 @@ For JavaScript, TypeScript (`.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`
 
 - **Hide code comments** removes `//` line comments and `/* … */` block comments.
 - **Hide summary comments** removes documentation comments: `///` XML docs in C#, and `/** … */` JSDoc blocks in both languages. A `/***` banner stays a normal block comment.
-- A run of lines that are only hidden comments collapses to a "N comment lines" row. Click it to read them. A trailing comment is removed and the code in front of it stays.
+- **Hide summary comments** removes `///` and `/** */` lines completely. There is no section to open.
+- **Collapse summary comments** folds those lines into a pill, `Comments - N lines`. Click it to read them. Checking **Hide summary comments** unchecks collapse and greys it out. The two cannot be on together.
+- A run of hidden code-comment lines uses the same pill. A trailing comment is removed and the code in front of it stays.
 - Text inside strings, template literals, C# verbatim and interpolated strings, character literals and JavaScript regexes is left alone. `http://…` inside a string is not treated as a comment.
 - Removed and added lines are read as two separate files, because a diff interleaves them. A context line is hidden only when both sides agree it is a hidden comment.
 - In side-by-side view each column is masked on its own, so an added comment can disappear while the code it replaced stays visible.
