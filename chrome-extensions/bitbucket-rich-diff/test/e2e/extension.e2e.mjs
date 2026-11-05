@@ -261,9 +261,30 @@ describe('mock pull request', () => {
     assert.equal(await testsFolder.locator('.bbrd-hidden-pill').textContent(), 'Hidden');
     assert.equal(await folderNamed('Payment\\.UnitTests').locator('.bbrd-hidden-pill').count(), 1);
     assert.equal(await folderNamed('src').locator('.bbrd-hidden-pill').count(), 0);
+    const bar = page.locator('.bbrd-hidden-bar').first();
+    await bar.waitFor();
+    assert.match(await bar.locator('.bbrd-hidden-summary').textContent(), /tests/);
+    await bar.getByRole('button', { name: 'Show hidden files' }).click();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
+    assert.equal(await page.locator('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').locator('..').locator('.bbrd-cat').textContent(), 'Tests');
+    await bar.getByRole('button', { name: 'Hide hidden files' }).click();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), false);
+    await openHideMenu();
     await panel.getByLabel('Test projects').uncheck();
     assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
     assert.equal(await testsFolder.locator('.bbrd-hidden-pill').count(), 0);
+
+    await panel.getByLabel('Solution and project files').check();
+    assert.equal(await article('Payment.sln').isVisible(), false);
+    assert.equal(await article('src/Payment.csproj').isVisible(), false);
+    assert.match(await bar.locator('.bbrd-hidden-summary').textContent(), /project/);
+    await panel.getByLabel('Solution and project files').uncheck();
+    assert.equal(await article('Payment.sln').isVisible(), true);
+
+    await panel.getByLabel('Generated files').check();
+    assert.equal(await article('pnpm-lock.yaml').isVisible(), false);
+    await panel.getByLabel('Generated files').uncheck();
+    assert.equal(await article('pnpm-lock.yaml').isVisible(), true);
 
     const pattern = panel.locator('[data-filter="hidePattern"]');
     await pattern.fill('\\.svg$');
@@ -302,6 +323,12 @@ describe('mock pull request', () => {
 
     await panel.getByLabel('Code comments').check();
     assert.equal(await shown(js, 'Reject empty amounts'), 0);
+    const commentFold = js.locator('.bbrd-comment-fold').first();
+    assert.match(await commentFold.textContent(), /comment line/);
+    await commentFold.click();
+    assert.equal(await shown(js, 'Reject empty amounts'), 1);
+    await commentFold.click();
+    assert.equal(await shown(js, 'Reject empty amounts'), 0);
     assert.equal(await js.locator('.bbrd-hide-comment:visible', { hasText: 'trailing note' }).count(), 0);
     assert.ok((await js.locator('.bbrd-hide-comment', { hasText: 'trailing note' }).count()) >= 1);
     assert.ok((await shown(js, 'gateway.capture')) >= 1);
@@ -310,6 +337,7 @@ describe('mock pull request', () => {
     assert.equal(await shown(cs, 'Reject empty amounts'), 0);
     assert.equal(await shown(cs, '<summary>'), 2);
 
+    await openHideMenu();
     await panel.getByLabel('Summary comments').check();
     assert.equal(await shown(js, '@param'), 0);
     assert.equal(await shown(cs, '<summary>'), 0);
@@ -321,6 +349,17 @@ describe('mock pull request', () => {
     await panel.getByLabel('Summary comments').uncheck();
     assert.equal(await shown(js, '@param'), 2);
     assert.equal(await shown(cs, '<summary>'), 2);
+  });
+
+  it('collapses a test file to one row per test', async () => {
+    const tests = article('src/Payment.Tests/ChargeTests.cs');
+    const folds = tests.locator('.bbrd-test-fold');
+    assert.equal(await folds.count(), 2);
+    assert.match(await folds.nth(0).locator('.bbrd-test-title').textContent(), /Charge rejects empty/);
+    assert.equal(await tests.locator('[data-key="code-line"]:visible', { hasText: 'Assert.Null' }).count(), 0);
+    await folds.nth(0).click();
+    assert.equal(await tests.locator('[data-key="code-line"]:visible', { hasText: 'Assert.Null' }).count(), 1);
+    await folds.nth(0).click();
   });
 
   it('re-attaches tabs when Bitbucket re-renders a file header', async () => {
