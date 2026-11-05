@@ -377,11 +377,25 @@ button.bbrd-test-fold {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 2px 8px;
   text-align: left;
   color: var(--ds-text-subtle, #505258);
   background: var(--ds-background-neutral, #f1f2f4);
+  overflow-anchor: none;
+}
+
+.bbrd-test-title {
+  min-width: 0;
+}
+
+/* The chunk only scrolls sideways. A vertical flick over a test or summary bar should not rubber-band it. */
+.diff-chunk,
+.chunks-wrapper {
+  overscroll-behavior-y: none;
 }
 
 button.bbrd-test-fold {
