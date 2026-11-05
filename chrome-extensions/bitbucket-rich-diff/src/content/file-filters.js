@@ -3,6 +3,10 @@ import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
 const COG_NAME = 'Global diff settings';
 const MENU_LABEL = 'Hide files and comments';
+const VIEWED_COUNTER = /^(\d+)\s+of\s+(\d+)\s+files?\s+viewed$/i;
+const CHANGED_COUNTER = /^(\d+)\s+files?\s+changed$/i;
+const ORIGINAL_VIEWED = 'bbrdViewedOriginal';
+const ORIGINAL_CHANGED = 'bbrdChangedOriginal';
 
 /** @type {WeakMap<HTMLElement, (key: string, value: unknown) => void>} */
 const changeHandlers = new WeakMap();
@@ -148,7 +152,13 @@ function buildPanel() {
   panel.setAttribute('aria-label', MENU_LABEL);
   panel.hidden = true;
   panel.innerHTML = `
-    <div class="bbrd-filters-head"><span>Hide</span><span class="bbrd-hidden-count" aria-live="polite"></span></div>
+    <div class="bbrd-filters-head">
+      <span>Hide</span>
+      <span class="bbrd-hidden-actions">
+        <span class="bbrd-hidden-count" aria-live="polite"></span>
+        <button type="button" class="bbrd-hidden-toggle" hidden>Show</button>
+      </span>
+    </div>
     <label class="bbrd-check" title="Also hides .markdown and the other markdown extensions"><input type="checkbox" data-filter="hideMarkdown" /> Markdown files</label>
     <label class="bbrd-check" title="Line comments and block comments"><input type="checkbox" data-filter="hideCodeComments" /> Code comments</label>
     <label class="bbrd-check" title="C# documentation comments and JSDoc blocks"><input type="checkbox" data-filter="hideSummaryComments" /> Summary comments</label>
@@ -160,7 +170,15 @@ function buildPanel() {
     <label class="bbrd-ext">Extensions <input type="text" data-filter="hiddenExtensions" placeholder="svg, lock, min.js" spellcheck="false" /></label>
     <label class="bbrd-ext">Pattern <input type="text" data-filter="hidePattern" placeholder="\\.Tests|tmp/" spellcheck="false" /></label>
     <p class="bbrd-hint">Regular expression. Matches the path, a folder, or the file name.</p>`;
-  panel.addEventListener('click', (event) => event.stopPropagation());
+  panel.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const toggle = event.target.closest('.bbrd-hidden-toggle');
+    if (!toggle || !panel.contains(toggle)) return;
+    event.preventDefault();
+    revealed = !revealed;
+    const last = lastApply;
+    if (last) mountFileFilters(last.root, last.settings, last.onChange, last.commentOnly);
+  });
   panel.addEventListener('keydown', (event) => event.stopPropagation());
   panel.addEventListener('change', (event) => {
     const input = event.target.closest('[data-filter]');
@@ -292,15 +310,35 @@ function applyHidden(root, settings, commentOnly) {
     setHidden(article, Boolean(category) && !revealed);
   }
   markHiddenFolders(root, settings);
+  const hiddenCount = CATEGORY_ORDER.reduce((sum, key) => sum + (counts[key] || 0), 0);
   const summary = formatHideSummary(counts, lines);
-  const count = root.querySelector?.('.bbrd-filters .bbrd-hidden-count') ?? document.querySelector('.bbrd-filters .bbrd-hidden-count');
+  syncFlyoutSummary(root, summary);
+  // Drop any leftover Show bars from older builds; Bitbucket re-renders the file tree and would duplicate them.
+  for (const bar of documentOf(root).querySelectorAll('.bbrd-hidden-bar')) bar.remove();
+  syncFileCounters(root, hiddenCount);
+  return hiddenCount;
+}
+
+function syncFlyoutSummary(root, summary) {
+  const panel = documentOf(root).querySelector('.bbrd-filters') ?? document.querySelector('.bbrd-filters');
+  if (!panel) return;
+  const count = panel.querySelector('.bbrd-hidden-count');
   if (count && count.textContent !== summary) count.textContent = summary;
-  syncBars(root, summary);
-  return CATEGORY_ORDER.reduce((sum, key) => sum + (counts[key] || 0), 0);
+  const toggle = panel.querySelector('.bbrd-hidden-toggle');
+  if (!toggle) return;
+  if (!summary) {
+    toggle.hidden = true;
+    return;
+  }
+  toggle.hidden = false;
+  const text = revealed ? 'Hide' : 'Show';
+  const name = revealed ? 'Hide hidden files' : 'Show hidden files';
+  if (toggle.textContent !== text) toggle.textContent = text;
+  toggle.setAttribute('aria-label', name);
 }
 
 function readStat(element) {
-  const text = element?.innerText ?? '';
+  const text = element?.textContent ?? '';
   return { added: sumPhrase(text, /(\d+)\s+lines?\s+added/gi), removed: sumPhrase(text, /(\d+)\s+lines?\s+removed/gi) };
 }
 
@@ -325,60 +363,82 @@ function syncChip(item, category) {
   if (chip.textContent !== label) chip.textContent = label;
 }
 
-function findFileList(root) {
-  const link = root.querySelector?.('a[href*="#chg-"]');
-  let list = link?.closest('ul') ?? null;
-  while (list?.parentElement?.closest('ul')?.querySelector('a[href*="#chg-"]')) {
-    list = list.parentElement.closest('ul');
+/**
+ * While files are hidden, show actual (real minus hidden) beside the original Bitbucket total.
+ * "0 of 14 files viewed" becomes "0 of 12 viewed · 14 files". "14 files changed" becomes
+ * "12 of 14 files changed". The original string is stored the first time we see the node and
+ * restored exactly when nothing is hidden. A later scan never treats rewritten text as the source.
+ * @param {ParentNode} root
+ * @param {number} hiddenCount
+ */
+function syncFileCounters(root, hiddenCount) {
+  const doc = documentOf(root);
+  const exclude = Boolean(hiddenCount) && !revealed;
+  const viewedVisible = exclude ? countViewedVisible(root) : null;
+  for (const node of counterLeaves(doc)) {
+    rewriteCounter(node, VIEWED_COUNTER, ORIGINAL_VIEWED, exclude, hiddenCount, (viewed, total) => {
+      const actual = Math.max(0, total - hiddenCount);
+      const nextViewed = viewedVisible == null ? Math.min(viewed, actual) : Math.min(viewedVisible, actual);
+      const word = total === 1 ? 'file' : 'files';
+      return `${nextViewed} of ${actual} viewed · ${total} ${word}`;
+    });
+    rewriteCounter(node, CHANGED_COUNTER, ORIGINAL_CHANGED, exclude, hiddenCount, (_count, total, source) => {
+      const actual = Math.max(0, total - hiddenCount);
+      const word = /\bfile\b/i.test(source) && !/\bfiles\b/i.test(source) ? 'file' : 'files';
+      return `${actual} of ${total} ${word} changed`;
+    });
   }
-  return list;
 }
 
-function syncBars(root, summary) {
-  const doc = documentOf(root);
-  if (!summary) {
-    for (const bar of doc.querySelectorAll('.bbrd-hidden-bar')) bar.remove();
+function counterLeaves(doc) {
+  if (!doc.body?.querySelectorAll) return [];
+  const out = [];
+  for (const el of doc.body.querySelectorAll('span, div, p, strong, em, label, a, li, h1, h2, h3, h4, button')) {
+    if (!(el instanceof HTMLElement)) continue;
+    if (el.closest('.bbrd-filters, .bbrd-menu-host, .bbrd-hidden-bar, .bbrd-tabs, [data-qa="bk-file__content"]')) continue;
+    if ([...el.children].some((child) => child.nodeType === 1 && !(child instanceof HTMLElement && child.classList.contains('vh')))) continue;
+    out.push(el);
+  }
+  return out;
+}
+
+/**
+ * @param {HTMLElement} node
+ * @param {RegExp} pattern
+ * @param {string} datasetKey
+ * @param {boolean} exclude
+ * @param {number} hiddenCount
+ * @param {(viewedOrCount: number, total: number, source: string) => string} format
+ */
+function rewriteCounter(node, pattern, datasetKey, exclude, hiddenCount, format) {
+  const stored = node.dataset[datasetKey];
+  const current = (node.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const source = stored || current;
+  const match = source.match(pattern);
+  if (!match) return;
+  if (!stored) node.dataset[datasetKey] = source;
+  if (!exclude || !hiddenCount) {
+    if (node.textContent !== node.dataset[datasetKey]) node.textContent = node.dataset[datasetKey];
     return;
   }
-  const list = findFileList(root);
-  if (list) fillBar(ensureBar(doc, list, 'list'), summary);
-  const articles = [...findFileDiffs(root)];
-  const last = articles[articles.length - 1];
-  if (last) fillBar(ensureBar(doc, last, 'diff'), summary);
+  const first = Number(match[1]);
+  const total = match[2] != null ? Number(match[2]) : first;
+  const next = format(first, total, source);
+  if (node.textContent !== next) node.textContent = next;
 }
 
-function ensureBar(doc, anchor, place) {
-  let bar = doc.querySelector(`.bbrd-hidden-bar[data-place="${place}"]`);
-  if (!bar) {
-    bar = doc.createElement('div');
-    bar.className = 'bbrd-hidden-bar';
-    bar.dataset.place = place;
-    const label = doc.createElement('span');
-    label.className = 'bbrd-hidden-summary';
-    const button = doc.createElement('button');
-    button.type = 'button';
-    button.className = 'bbrd-hidden-toggle';
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      revealed = !revealed;
-      const last = lastApply;
-      if (last) mountFileFilters(last.root, last.settings, last.onChange, last.commentOnly);
-    });
-    bar.append(label, button);
+/** Checked Viewed boxes on files that are still showing. Null when the page has no such boxes, so the original numerator is kept. */
+function countViewedVisible(root) {
+  let total = 0;
+  let sawBox = false;
+  for (const article of findFileDiffs(root)) {
+    const box = article.querySelector('.file-header input[type="checkbox"], [data-qa="bk-file__header"] input[type="checkbox"], label input[type="checkbox"]');
+    if (!(box instanceof HTMLInputElement)) continue;
+    sawBox = true;
+    if (article.classList.contains('bbrd-file-hidden')) continue;
+    if (box.checked) total += 1;
   }
-  if (anchor.nextElementSibling !== bar) anchor.insertAdjacentElement('afterend', bar);
-  return bar;
-}
-
-function fillBar(bar, summary) {
-  const label = bar.querySelector('.bbrd-hidden-summary');
-  if (label && label.textContent !== summary) label.textContent = summary;
-  const button = bar.querySelector('.bbrd-hidden-toggle');
-  const text = revealed ? 'Hide' : 'Show';
-  const name = revealed ? 'Hide hidden files' : 'Show hidden files';
-  if (button && button.textContent !== text) button.textContent = text;
-  button?.setAttribute('aria-label', name);
+  return sawBox ? total : null;
 }
 
 function setHidden(element, hide) {
