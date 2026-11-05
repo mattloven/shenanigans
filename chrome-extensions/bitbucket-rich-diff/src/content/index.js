@@ -4,6 +4,7 @@ import { createCloudClient, findFileDiffs, getFilePath, parsePrUrl, prKey } from
 import { commentOnlyPaths, updateCommentMasks } from './comment-mask.js';
 import { FileView } from './file-view.js';
 import { mountFileFilters, resetHiddenReveal } from './file-filters.js';
+import { groupCounts } from './group-counts.js';
 import { clearStats, mountStatsTab } from './stats-tab.js';
 import { mountTestOutlines } from './test-outline.js';
 import { PrContext } from './pr-context.js';
@@ -71,6 +72,7 @@ export class RichDiffApp {
     }
     if (!this.context || prKey(this.context.pr) !== prKey(pr)) {
       resetHiddenReveal();
+      clearStats(this.root);
       for (const view of this.views.values()) view.destroy();
       this.views.clear();
       this.context = new PrContext(pr, this.client, this.location.origin);
@@ -103,9 +105,10 @@ export class RichDiffApp {
 
   applyPageFilters() {
     updateCommentMasks(this.root, this.settings);
+    mountStatsTab(this.root);
     mountFileFilters(this.root, this.settings, (key, value) => this.persistSetting(key, value), commentOnlyPaths(this.root));
     mountTestOutlines(this.root);
-    mountStatsTab(this.root);
+    groupCounts(this.root);
   }
 
   persistSetting(key, value) {

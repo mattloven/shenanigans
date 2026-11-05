@@ -1,4 +1,5 @@
 import { commentLanguage } from '../core/comments.js';
+import { formatCount } from '../core/file-filter.js';
 import { findTestSpans, isTestFile } from '../core/test-outline.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
@@ -61,7 +62,7 @@ function applySpan(path, rows, lines, span, index) {
   title.textContent = span.title;
   const stat = document.createElement('span');
   stat.className = 'bbrd-test-stat';
-  stat.textContent = `+${added} −${removed}`;
+  stat.textContent = `+${formatCount(added)} −${formatCount(removed)}`;
   fold.append(title, stat);
   const nodes = nodesInSpan(start, end);
   const open = openTests.has(key);
