@@ -498,4 +498,105 @@ function syncFileCounters(root, hiddenCount) {
 }
 
 function counterLeaves(doc) {
-  if (!doc.body?.querySelectorAll) return
+  if (!doc.body?.querySelectorAll) return [];
+  const out = [];
+  for (const el of doc.body.querySelectorAll('span, div, p, strong, em, label, a, li, h1, h2, h3, h4, button')) {
+    if (!(el instanceof HTMLElement)) continue;
+    if (el.closest('.bbrd-filters, .bbrd-menu-host, .bbrd-hidden-bar, .bbrd-tabs, .bbrd-stats, [data-qa="bk-file__content"]')) continue;
+    if ([...el.children].some((child) => child.nodeType === 1 && !(child instanceof HTMLElement && child.classList.contains('vh')))) continue;
+    out.push(el);
+  }
+  return out;
+}
+
+/**
+ * @param {HTMLElement} node
+ * @param {RegExp} pattern
+ * @param {string} datasetKey
+ * @param {boolean} exclude
+ * @param {number} hiddenCount
+ * @param {(viewedOrCount: number, total: number, source: string) => string} format
+ */
+function rewriteCounter(node, pattern, datasetKey, exclude, hiddenCount, format) {
+  const stored = node.dataset[datasetKey];
+  const current = (node.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const source = stored || current;
+  const match = source.match(pattern);
+  if (!match) return;
+  if (!stored) node.dataset[datasetKey] = source;
+  if (!exclude || !hiddenCount) {
+    const restored = groupCountText(node.dataset[datasetKey]);
+    if (node.textContent !== restored) node.textContent = restored;
+    return;
+  }
+  const first = Number(match[1].replaceAll(',', ''));
+  const total = match[2] != null ? Number(match[2].replaceAll(',', '')) : first;
+  const next = format(first, total, source);
+  if (node.textContent !== next) node.textContent = next;
+}
+
+/** Checked Viewed boxes on files that are still showing. Null when the page has no such boxes, so the original numerator is kept. */
+function countViewedVisible(root) {
+  let total = 0;
+  let sawBox = false;
+  for (const article of findFileDiffs(root)) {
+    const box = article.querySelector('.file-header input[type="checkbox"], [data-qa="bk-file__header"] input[type="checkbox"], label input[type="checkbox"]');
+    if (!(box instanceof HTMLInputElement)) continue;
+    sawBox = true;
+    if (article.classList.contains('bbrd-file-hidden')) continue;
+    if (box.checked) total += 1;
+  }
+  return sawBox ? total : null;
+}
+
+function setHidden(element, hide) {
+  if (element.classList.contains('bbrd-file-hidden') !== hide) element.classList.toggle('bbrd-file-hidden', hide);
+}
+
+function markHiddenFolders(root, settings, lens) {
+  if (!root.querySelectorAll) return;
+  for (const button of root.querySelectorAll('button')) {
+    if (!(button instanceof HTMLButtonElement)) continue;
+    if (!button.querySelector('[aria-label="Directory"]')) continue;
+    const list = button.closest('ul[role="list"]');
+    if (!list?.querySelector('a[href*="#chg-"]')) continue;
+    syncFolderPill(button, !lens && isHiddenFolder(directoryPath(button), settings));
+  }
+}
+
+function directoryPath(button) {
+  const texts = [...button.querySelectorAll('span')]
+    .filter((span) => !span.classList.contains('bbrd-hidden-pill') && !span.querySelector('span, svg'))
+    .map((span) => span.textContent.replace(/\s+/g, ' ').trim())
+    .filter((text) => text && text !== 'Directory');
+  return texts.sort((a, b) => b.length - a.length)[0] ?? '';
+}
+
+function syncFolderPill(button, show) {
+  const pills = [...button.querySelectorAll(':scope > .bbrd-hidden-pill')];
+  if (!show) {
+    for (const pill of pills) pill.remove();
+    return;
+  }
+  for (const extra of pills.slice(1)) extra.remove();
+  let pill = pills[0];
+  if (!pill) {
+    pill = button.ownerDocument.createElement('span');
+    pill.className = 'bbrd-hidden-pill bbrd-pill';
+    pill.dataset.kind = 'hidden';
+    pill.textContent = 'Hidden';
+    pill.title = 'Hidden by Bitbucket Rich Diff';
+  }
+  placeLeading(button, pill);
+}
+
+function placeLeading(host, pill) {
+  const icon = [...host.children].find((child) => child !== pill && child instanceof HTMLElement && (child.getAttribute('role') === 'img' || child.tagName === 'svg' || child.getAttribute('aria-label') === 'Directory'));
+  if (icon) {
+    if (pill.parentElement === host && pill.nextElementSibling === icon) return;
+    host.insertBefore(pill, icon);
+    return;
+  }
+  if (host.firstElementChild === pill) return;
+  host.insertBefore(pill, host.firstChild);
+}
