@@ -144,4 +144,70 @@ function paintGroup(bar, group, filters, count, viewed, added, removed) {
   const viewedText = done ? 'Done' : `${formatCount(viewed)} viewed`;
   const addedText = `+${formatCount(added)}`;
   const removedText = `−${formatCount(removed)}`;
-  if 
+  if (name && name.textContent !== group.name) name.textContent = group.name;
+  if (tally && tally.textContent !== countText) tally.textContent = countText;
+  if (progress && progress.textContent !== viewedText) progress.textContent = viewedText;
+  if (addedNode && addedNode.textContent !== addedText) addedNode.textContent = addedText;
+  if (removedNode && removedNode.textContent !== removedText) removedNode.textContent = removedText;
+  const width = count === 0 ? '0%' : `${Math.round((viewed / count) * 100)}%`;
+  if (fill instanceof HTMLElement && fill.style.width !== width) fill.style.width = width;
+  const showing = activeGroup === group.id ? 'Showing. ' : '';
+  button.setAttribute('aria-label', `${showing}${group.name}, ${countText}, ${addedText} ${removedText}, ${viewedText}`);
+}
+
+/**
+ * @param {HTMLElement} section
+ * @param {{ group: string, count: number, viewed: number }[]} summaries
+ * @param {ReviewFile[]} files
+ * @param {Set<string>} reviewed
+ * @param {string[]} order
+ */
+function paintActions(section, summaries, files, reviewed, order) {
+  const head = section.querySelector('.bbrd-review-head');
+  if (!head) return;
+  let actions = head.querySelector('.bbrd-review-actions');
+  if (!actions) {
+    actions = section.ownerDocument.createElement('div');
+    actions.className = 'bbrd-review-actions';
+    actions.innerHTML = '<button type="button" class="bbrd-review-continue">Continue</button><label class="bbrd-switch"><input type="checkbox" class="bbrd-review-next" /><span>Next unviewed</span></label>';
+    actions.querySelector('.bbrd-review-continue')?.addEventListener('click', () => {
+      if (!lastMount) return;
+      const groups = activeWorkflow(lastMount.settings).groups;
+      const next = firstUnfinishedGroup(summariesFor(lastMount.files, lastMount.reviewed, groups), groups.map((group) => group.id));
+      if (!next) return;
+      activeGroup = next;
+      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
+      actions.ownerDocument.dispatchEvent(new CustomEvent('bbrd-review-group'));
+    });
+    actions.querySelector('.bbrd-review-next')?.addEventListener('change', () => {
+      if (!lastMount) return;
+      const box = actions.querySelector('.bbrd-review-next');
+      unviewedOnly = box instanceof HTMLInputElement && box.checked;
+      const groups = activeWorkflow(lastMount.settings).groups;
+      const orderIds = groups.map((group) => group.id);
+      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
+      actions.ownerDocument.dispatchEvent(new CustomEvent('bbrd-review-group'));
+      if (!unviewedOnly) return;
+      const file = nextUnviewed(lastMount.files, lastMount.reviewed, activeGroup, currentPath(lastMount.root), orderIds);
+      const link = file?.item.querySelector('a[href*="#chg-"]');
+      if (!(link instanceof HTMLElement)) return;
+      link.scrollIntoView?.({ block: 'nearest' });
+      link.click();
+    });
+    head.append(actions);
+  }
+  const unfinished = firstUnfinishedGroup(summaries, order);
+  const continueButton = actions.querySelector('.bbrd-review-continue');
+  if (continueButton instanceof HTMLButtonElement) {
+    continueButton.disabled = !unfinished;
+    const nextName = unfinished ? activeWorkflow(lastMount?.settings).groups.find((group) => group.id === unfinished)?.name ?? unfinished : '';
+    const continueText = unfinished ? `Continue to ${nextName}` : 'Done';
+    if (continueButton.textContent !== continueText) continueButton.textContent = continueText;
+    continueButton.title = unfinished ? `Show ${nextName}` : 'Every file is marked viewed';
+  }
+  const upcoming = nextUnviewed(files, reviewed, activeGroup, currentPath(section.ownerDocument), order);
+  if (!upcoming) unviewedOnly = false;
+  const nextSwitch = actions.querySelector('.bbrd-review-next');
+  if (nextSwitch instanceof HTMLInputElement) {
+    nextSwitch.checked = unviewedOnly;
+    nextSwitch.disabled 
