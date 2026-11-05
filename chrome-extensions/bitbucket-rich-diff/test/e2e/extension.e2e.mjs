@@ -225,11 +225,8 @@ describe('mock pull request', () => {
   it('hides markdown and chosen extensions from the file list and the diff', async () => {
     assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
     assert.equal(await page.locator('.sidebar .bbrd-filters').count(), 0);
-    const besideCog = await page.evaluate(() => {
-      const cog = [...document.querySelectorAll('button')].find((button) => (button.textContent || '').includes('Global diff settings') && !button.closest('.bbrd-menu-host'));
-      return document.querySelector('.bbrd-menu-host')?.nextElementSibling === cog;
-    });
-    assert.equal(besideCog, true);
+    assert.equal(await page.locator('.bbrd-stats-actions .bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.diff-bar .bbrd-menu-host').count(), 0);
     const panel = await openHideMenu();
     await panel.getByLabel('Markdown files').check();
     assert.equal(await article('README.md').isVisible(), false);
@@ -322,11 +319,8 @@ describe('mock pull request', () => {
     await page.getByRole('button', { name: 'Hide files and comments' }).waitFor();
     assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
     assert.equal(await page.locator('.bbrd-filters').count(), 1);
-    const besideCog = await page.evaluate(() => {
-      const cog = [...document.querySelectorAll('button')].find((button) => (button.textContent || '').includes('Global diff settings') && !button.closest('.bbrd-menu-host'));
-      return document.querySelector('.bbrd-menu-host')?.nextElementSibling === cog;
-    });
-    assert.equal(besideCog, true);
+    assert.equal(await page.locator('.bbrd-stats-actions .bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.diff-bar .bbrd-menu-host').count(), 0);
   });
 
   it('re-applies one Hidden pill and the viewed counter after the file tree re-renders', async () => {
@@ -401,22 +395,25 @@ describe('mock pull request', () => {
     await folds.nth(0).click();
   });
 
-  it('opens a stats summary next to commits', async () => {
-    const tab = page.getByRole('tab', { name: 'Stats' });
-    assert.equal(await page.locator('.pr-tabs a[href="/acme/payments/pull-requests/42/commits"] + .bbrd-stats-tab').count(), 1);
-    assert.equal(await page.locator('.repo-nav .bbrd-stats-tab').count(), 0);
-    await tab.click();
-    const panel = page.getByRole('region', { name: 'Pull request stats' });
+  it('shows the summary above the file tree and the diff', async () => {
+    assert.equal(await page.locator('.bbrd-stats-tab').count(), 0);
+    const panel = page.getByRole('region', { name: 'Betterer Bit Bucket' });
+    assert.equal(await panel.locator('h2').textContent(), '💩 Betterer Bit Bucket');
+    assert.equal(await page.locator('.page').evaluate((el) => el.previousElementSibling?.classList.contains('bbrd-stats')), true);
+    assert.equal(await page.locator('#file-tree .bbrd-stats').count(), 0);
+    assert.equal(await panel.locator('.bbrd-stats-actions .bbrd-menu-button').count(), 1);
     const figure = (name) => panel.locator(`[data-stat="${name}"] strong`).textContent();
     assert.equal(await figure('files'), '14');
-    assert.match(await panel.locator('[data-stat="lines"] .bbrd-add').textContent(), /^\+\d+$/);
-    assert.match(await panel.locator('[data-stat="lines"] .bbrd-del').textContent(), /^−\d+$/);
+    assert.equal(await panel.locator('[data-stat="lines"] .bbrd-add').textContent(), '+1,404');
+    assert.equal(await panel.locator('[data-stat="lines"] .bbrd-del').textContent(), '−82');
+    assert.match(await page.locator('.lines-updated').innerText(), /\+1,404/);
+    assert.match(await page.locator('.lines-updated').innerText(), /-82/);
     assert.equal(await figure('markdown'), '3');
     assert.equal(await figure('tests'), '2 files · 2 tests');
     assert.equal(await figure('projects'), '2');
     assert.equal(await figure('generated'), '1');
-    await tab.click();
-    assert.equal(await panel.isVisible(), false);
+    assert.equal(await figure('comments'), '1 / 4 resolved');
+    assert.equal(await panel.isVisible(), true);
   });
 
   it('re-attaches tabs when Bitbucket re-renders a file header', async () => {

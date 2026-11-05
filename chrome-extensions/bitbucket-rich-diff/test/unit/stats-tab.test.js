@@ -42,10 +42,11 @@ describe('stats summary', () => {
     const lines = panel.querySelector('[data-stat="lines"] strong');
     expect(lines.querySelector('.bbrd-add').textContent).toBe('+1,404');
     expect(lines.querySelector('.bbrd-del').textContent).toBe('−82');
-    expect(panel.querySelector('.bbrd-stats-lead').textContent).toContain('+1,404');
+    expect(panel.querySelector('.bbrd-stats-lead')).toBeNull();
     expect(panel.querySelector('[data-stat="comments"] strong').textContent).toBe('0 / 7 resolved');
-    expect(panel.querySelector('.bbrd-stats-lead').textContent).toContain('0 / 7 resolved');
-
+    expect(panel.querySelector('[data-stat="comments"] .bbrd-tick')).toBeNull();
+    expect(panel.querySelector('[data-stat="markdown"] strong').textContent).toBe('1');
+    expect(panel.querySelector('[data-stat="markdown"] span').textContent).toBe('Markdown file');
     for (const el of [...document.querySelectorAll('div')]) {
       if (/^(un)?resolved comments \(\d+\)$/i.test(el.textContent.trim())) el.remove();
     }
@@ -56,6 +57,32 @@ describe('stats summary', () => {
     document.querySelector('button').textContent = 'Comments (2 unresolved)';
     mountStatsTab(document);
     expect(document.querySelector('[data-stat="comments"] strong').textContent).toBe('2 unresolved');
+    expect(document.querySelector('[data-stat="comments"] .bbrd-tick')).toBeNull();
+    document.querySelector('button').textContent = 'Comments (0 unresolved)';
+    mountStatsTab(document);
+    const open = document.querySelector('[data-stat="comments"] strong');
+    expect(open.textContent).toBe('0 unresolved');
+    expect(open.querySelector('.bbrd-tick svg')).not.toBeNull();
+    document.body.insertAdjacentHTML('beforeend', '<div>Resolved Comments (4)</div>');
+    mountStatsTab(document);
+    const settled = document.querySelector('[data-stat="comments"] strong');
+    expect(settled.textContent).toBe('4 / 4 resolved');
+    expect(settled.querySelector('.bbrd-tick svg')).not.toBeNull();
     expect(document.querySelector('.bbrd-stats').hidden).toBe(false);
+  });
+
+  it('reads a Lines updated row that only shows additions', () => {
+    document.body.innerHTML = `
+      <div role="tablist"><a role="tab" href="/acme/payments/pull-requests/42/diff">Files changed</a></div>
+      <div class="shell"><div class="split">
+        <div id="file-tree"><div><span><h5>Lines updated</h5></span><div><span>+17440</span></div></div></div>
+        <div class="preview"><article data-qa="branch-diff-file" aria-label="Diff of file README.md"></article></div>
+      </div></div>`;
+    mountStatsTab(document);
+    const lines = document.querySelector('[data-stat="lines"] strong');
+    expect(lines.querySelector('.bbrd-add').textContent).toBe('+17,440');
+    expect(lines.querySelector('.bbrd-del').textContent).toBe('−0');
+    expect(document.querySelector('.bbrd-stats-lead')).toBeNull();
+    expect(lines.querySelector('.bbrd-add').textContent).toBe('+17,440');
   });
 });
