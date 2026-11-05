@@ -284,18 +284,33 @@ a:has(> .bbrd-pill) {
 
 button.bbrd-stats-tab {
   appearance: none;
-  margin: 0 0 0 4px;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  margin: 0;
+  padding: 0 10px;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-button.bbrd-stats-tab[aria-expanded='true'] {
+button.bbrd-stats-tab[aria-selected='true'] {
   color: var(--ds-link, #1868db);
   box-shadow: inset 0 -2px 0 var(--ds-link, #1868db);
+}
+
+.bbrd-stats .bbrd-add {
+  color: #1f845a;
+  font-weight: 700;
+}
+
+.bbrd-stats .bbrd-del {
+  color: #e2483d;
+  font-weight: 700;
 }
 
 .bbrd-stats {
@@ -337,7 +352,7 @@ button.bbrd-stats-tab[aria-expanded='true'] {
   font-size: 16px;
 }
 
-.bbrd-stats-figure span {
+.bbrd-stats-figure span:not(.bbrd-add):not(.bbrd-del) {
   color: var(--ds-text-subtle, #505258);
   font-size: 12px;
 }
