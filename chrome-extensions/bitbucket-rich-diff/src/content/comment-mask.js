@@ -1,11 +1,12 @@
 import { classifyDiffRows, classifySideBySideRows, commentLanguage } from '../core/comments.js';
+import { formatCount } from '../core/file-filter.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
 const WRAP = 'data-bbrd-wrap';
 
 /** Removes comment masking so a file can be re-scanned or shown in full. */
 export function clearCommentMasks(root) {
-  for (const row of root.querySelectorAll('.bbrd-hide-line')) row.classList.remove('bbrd-hide-line');
+  for (const row of root.querySelectorAll('.bbrd-hide-line, .bbrd-fold-line')) row.classList.remove('bbrd-hide-line', 'bbrd-fold-line', 'bbrd-comment-open');
   for (const wrap of [...root.querySelectorAll(`[${WRAP}]`)]) wrap.replaceWith(...wrap.childNodes);
   for (const mark of [...root.querySelectorAll('[data-bbrd-mask]')]) mark.remove();
   for (const cell of root.querySelectorAll('[data-line-type]')) cell.normalize();
@@ -69,11 +70,11 @@ function maskText(node, local) {
  * Each file is skipped when its lines and the relevant settings have not changed.
  */
 export function updateCommentMasks(root, settings) {
-  const active = settings.hideCodeComments || settings.hideSummaryComments;
+  const active = settings.hideCodeComments || settings.hideSummaryComments || settings.collapseSummaryComments;
   for (const article of findFileDiffs(root)) {
     const language = commentLanguage(getFilePath(article));
     const rows = [...article.querySelectorAll('[data-key="code-line"]')];
-    const signature = active && language ? `${settings.hideCodeComments}/${settings.hideSummaryComments}/${rows.length}/${textSize(rows)}` : 'off';
+    const signature = active && language ? `${settings.hideCodeComments}/${settings.hideSummaryComments}/${settings.collapseSummaryComments}/${rows.length}/${textSize(rows)}` : 'off';
     if (signature === 'off') {
       if (article.getAttribute('data-bbrd-comments') !== 'off' || article.querySelector('.bbrd-hide-line, .bbrd-comment-fold, [data-bbrd-mask], [data-bbrd-wrap]')) {
         clearCommentMasks(article);
@@ -86,6 +87,7 @@ export function updateCommentMasks(root, settings) {
     // Syntax highlighting rewrites the cell after we mask it. The line text stays the
     // same, so the signature matches, but the mask marker is gone and has to be put back.
     if (article.getAttribute('data-bbrd-comments') === signature && masksIntact(rows)) {
+      concealVanishedRows(article);
       foldCommentRuns(article, getFilePath(article));
       continue;
     }
@@ -94,6 +96,7 @@ export function updateCommentMasks(root, settings) {
     article.removeAttribute('data-bbrd-folds');
     if (signature !== 'off') maskArticle(rows, language, settings);
     article.setAttribute('data-bbrd-comments', signature);
+    concealVanishedRows(article);
     foldCommentRuns(article, getFilePath(article));
   }
 }
@@ -138,7 +141,7 @@ function foldCommentRuns(article, path) {
   /** @type {HTMLElement[]} */
   let current = [];
   for (const row of rows) {
-    if (row.classList.contains('bbrd-hide-line')) current.push(row);
+    if (isFoldedCommentRow(row)) current.push(row);
     else if (current.length) {
       runs.push(current);
       current = [];
@@ -154,10 +157,14 @@ function foldCommentRuns(article, path) {
     fold.type = 'button';
     fold.className = 'bbrd-comment-fold';
     const count = run.length;
-    fold.textContent = `${count} comment ${count === 1 ? 'line' : 'lines'}`;
+    const pill = document.createElement('span');
+    pill.className = 'bbrd-pill bbrd-fold-pill';
+    pill.textContent = `Comments - ${formatCount(count)} ${count === 1 ? 'line' : 'lines'}`;
+    fold.append(pill);
     const open = openCommentFolds.has(key);
     fold.setAttribute('aria-expanded', open ? 'true' : 'false');
     setCommentOpen(run, open);
+    for (const row of run) row.classList.add('bbrd-hide-line');
     // Focusing the bar scrolls it into view and fights the wheel gesture.
     fold.addEventListener('mousedown', (event) => event.preventDefault());
     fold.addEventListener('click', (event) => {
@@ -172,6 +179,26 @@ function foldCommentRuns(article, path) {
     run[0].parentElement.insertBefore(fold, run[0]);
   });
   article.setAttribute('data-bbrd-folds', signature);
+}
+
+/** A row folds when every side that has text is a hidden comment. A blank side-by-side column does not keep it open. */
+function isFoldedCommentRow(row) {
+  if (row.classList.contains('bbrd-fold-line')) return true;
+  const lines = [...row.querySelectorAll('[data-qa="code-line"]')];
+  const meaningful = lines.filter((line) => (line.textContent ?? '').trim() !== '');
+  return meaningful.length > 0 && meaningful.every((line) => line.classList.contains('bbrd-fold-line'));
+}
+
+/** A summary line that is hidden outright takes its blank side-by-side partner with it, and grows no bar. */
+function concealVanishedRows(article) {
+  for (const row of article.querySelectorAll('[data-key="code-line"]')) {
+    if (row.classList.contains('bbrd-fold-line')) continue;
+    const lines = [...row.querySelectorAll('[data-qa="code-line"]')];
+    const meaningful = lines.filter((line) => (line.textContent ?? '').trim() !== '');
+    if (meaningful.length > 0 && meaningful.every((line) => line.classList.contains('bbrd-hide-line') && !line.classList.contains('bbrd-fold-line'))) {
+      row.classList.add('bbrd-hide-line');
+    }
+  }
 }
 
 function masksIntact(rows) {
@@ -246,6 +273,7 @@ function maskSideBySide(described, language, settings) {
 
 function applyCell(entry, result) {
   entry.line.classList.toggle('bbrd-hide-line', result.hideLine);
+  entry.line.classList.toggle('bbrd-fold-line', !!result.fold);
   if (!result.hideLine) maskCell(entry.cell, result.intervals);
   const mark = document.createElement('span');
   mark.setAttribute('data-bbrd-mask', '');
