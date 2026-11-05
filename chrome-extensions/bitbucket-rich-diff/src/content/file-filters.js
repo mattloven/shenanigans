@@ -349,18 +349,21 @@ function sumPhrase(text, pattern) {
 }
 
 function syncChip(item, category) {
-  let chip = item.querySelector(':scope > .bbrd-cat');
+  const host = item.querySelector(':scope > a[href*="#chg-"]') ?? item;
+  let chip = host.querySelector(':scope > .bbrd-cat');
   if (!category) {
     chip?.remove();
     return;
   }
   const label = CATEGORY_LABEL[category];
   if (!chip) {
-    chip = item.ownerDocument.createElement('span');
-    chip.className = 'bbrd-cat';
-    item.append(chip);
+    chip = host.ownerDocument.createElement('span');
+    chip.className = 'bbrd-cat bbrd-pill';
+    chip.title = 'Hidden by Bitbucket Rich Diff';
   }
+  chip.dataset.kind = category;
   if (chip.textContent !== label) chip.textContent = label;
+  placeLeading(host, chip);
 }
 
 /**
@@ -395,7 +398,7 @@ function counterLeaves(doc) {
   const out = [];
   for (const el of doc.body.querySelectorAll('span, div, p, strong, em, label, a, li, h1, h2, h3, h4, button')) {
     if (!(el instanceof HTMLElement)) continue;
-    if (el.closest('.bbrd-filters, .bbrd-menu-host, .bbrd-hidden-bar, .bbrd-tabs, [data-qa="bk-file__content"]')) continue;
+    if (el.closest('.bbrd-filters, .bbrd-menu-host, .bbrd-hidden-bar, .bbrd-tabs, .bbrd-stats, [data-qa="bk-file__content"]')) continue;
     if ([...el.children].some((child) => child.nodeType === 1 && !(child instanceof HTMLElement && child.classList.contains('vh')))) continue;
     out.push(el);
   }
@@ -465,16 +468,30 @@ function directoryPath(button) {
 }
 
 function syncFolderPill(button, show) {
-  const pills = [...button.querySelectorAll('.bbrd-hidden-pill')];
+  const pills = [...button.querySelectorAll(':scope > .bbrd-hidden-pill')];
   if (!show) {
     for (const pill of pills) pill.remove();
     return;
   }
   for (const extra of pills.slice(1)) extra.remove();
-  if (pills.length > 0) return;
-  const pill = button.ownerDocument.createElement('span');
-  pill.className = 'bbrd-hidden-pill';
-  pill.textContent = 'Hidden';
-  pill.title = 'Hidden by Bitbucket Rich Diff';
-  button.append(pill);
+  let pill = pills[0];
+  if (!pill) {
+    pill = button.ownerDocument.createElement('span');
+    pill.className = 'bbrd-hidden-pill bbrd-pill';
+    pill.dataset.kind = 'hidden';
+    pill.textContent = 'Hidden';
+    pill.title = 'Hidden by Bitbucket Rich Diff';
+  }
+  placeLeading(button, pill);
+}
+
+function placeLeading(host, pill) {
+  const icon = [...host.children].find((child) => child !== pill && child instanceof HTMLElement && (child.getAttribute('role') === 'img' || child.tagName === 'svg' || child.getAttribute('aria-label') === 'Directory'));
+  if (icon) {
+    if (pill.parentElement === host && pill.nextElementSibling === icon) return;
+    host.insertBefore(pill, icon);
+    return;
+  }
+  if (host.firstElementChild === pill) return;
+  host.insertBefore(pill, host.firstChild);
 }
