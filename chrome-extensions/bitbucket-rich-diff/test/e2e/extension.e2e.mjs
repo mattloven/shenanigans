@@ -276,4 +276,70 @@ describe('mock pull request', () => {
     await openHideMenu();
     await panel.getByRole('button', { name: 'Hide hidden files' }).click();
     assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), false);
-    assert.equal(await viewed.tex
+    assert.equal(await viewed.textContent(), '0 of 12 viewed · 14 files');
+    await openHideMenu();
+    await panel.getByLabel('Test projects').uncheck();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
+    assert.equal(await testsFolder.locator('.bbrd-hidden-pill').count(), 0);
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+    assert.equal(await changed.textContent(), '14 files changed');
+
+    await panel.getByLabel('Solution and project files').check();
+    assert.equal(await article('Payment.sln').isVisible(), false);
+    assert.equal(await article('src/Payment.csproj').isVisible(), false);
+    assert.match(await panel.locator('.bbrd-hidden-count').textContent(), /project/);
+    assert.equal(await viewed.textContent(), '0 of 12 viewed · 14 files');
+    assert.equal(await changed.textContent(), '12 of 14 files changed');
+    await panel.getByLabel('Solution and project files').uncheck();
+    assert.equal(await article('Payment.sln').isVisible(), true);
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+
+    await panel.getByLabel('Generated files').check();
+    assert.equal(await article('pnpm-lock.yaml').isVisible(), false);
+    await panel.getByLabel('Generated files').uncheck();
+    assert.equal(await article('pnpm-lock.yaml').isVisible(), true);
+
+    const pattern = panel.locator('[data-filter="hidePattern"]');
+    await pattern.fill('\\.svg$');
+    await pattern.blur();
+    assert.equal(await article('assets/logo.svg').isVisible(), false);
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    await pattern.fill('[');
+    await pattern.blur();
+    assert.equal(await pattern.getAttribute('aria-invalid'), 'true');
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    await pattern.fill('');
+    await pattern.blur();
+    assert.equal(await article('assets/logo.svg').isVisible(), true);
+  });
+
+  it('keeps a single hide menu when the diff toolbar is re-rendered', async () => {
+    await page.evaluate(() => window.__replaceDiffToolbar());
+    await page.evaluate(() => window.__replaceDiffToolbar());
+    await page.getByRole('button', { name: 'Hide files and comments' }).waitFor();
+    assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.bbrd-filters').count(), 1);
+    assert.equal(await page.locator('.bbrd-stats-actions .bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.diff-bar .bbrd-menu-host').count(), 0);
+  });
+
+  it('re-applies one Hidden pill and the viewed counter after the file tree re-renders', async () => {
+    const panel = await openHideMenu();
+    await panel.getByLabel('Test projects').check();
+    const folderNamed = (name) => page.locator('#file-list button').filter({ has: page.locator('.dirname', { hasText: new RegExp(`^${name}$`) }) });
+    assert.equal(await folderNamed('Payment\\.Tests').locator('.bbrd-hidden-pill').count(), 1);
+    assert.equal(await page.locator('[data-qa="files-viewed-count"]').textContent(), '0 of 12 viewed · 14 files');
+    assert.equal(await page.locator('[data-qa="files-changed-count"]').textContent(), '12 of 14 files changed');
+
+    await page.evaluate(() => window.__replaceFileTree());
+    await folderNamed('Payment\\.Tests').locator('.bbrd-hidden-pill').waitFor();
+    assert.equal(await folderNamed('Payment\\.Tests').locator('.bbrd-hidden-pill').count(), 1);
+    assert.equal(await folderNamed('Payment\\.UnitTests').locator('.bbrd-hidden-pill').count(), 1);
+    assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.bbrd-filters').count(), 1);
+    assert.equal(await page.locator('.bbrd-hidden-bar').count(), 0);
+    assert.equal(await page.locator('[data-qa="files-viewed-count"]').textContent(), '0 of 12 viewed · 14 files');
+    assert.equal(await page.locator('[data-qa="files-changed-count"]').textContent(), '12 of 14 files changed');
+
+    await openHideMenu();
+    await panel.get
