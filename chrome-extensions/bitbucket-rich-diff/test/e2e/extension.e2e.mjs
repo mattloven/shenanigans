@@ -1,1 +1,0 @@
-__LOAD_FROM__/tmp/bbrd-mcp/e2e-ready.mjs
