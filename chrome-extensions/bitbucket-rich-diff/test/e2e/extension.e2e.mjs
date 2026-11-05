@@ -177,4 +177,28 @@ describe('mock pull request', () => {
     assert.equal(await readme.getAttribute('data-bbrd-view'), 'changes');
   });
 
-  it('rende
+  it('renders a structural JSON diff with a jumpable summary', async () => {
+    const pkg = article('package.json');
+    await pkg.locator('.jd-summary').waitFor();
+    const paths = await pkg.locator('.jd-sum-path').allTextContents();
+    assert.deepEqual(paths, [
+      'version',
+      'scripts.test',
+      'scripts.typecheck',
+      'dependencies.express',
+      'dependencies.request',
+      'dependencies.undici',
+      'regions[2]',
+      'featureFlags[0].enabled',
+      'featureFlags[0].rollout',
+      'engines.node',
+    ]);
+    assert.equal(await pkg.locator('[data-path="engines.node"] ins').textContent(), '">=20"');
+    await pkg.locator('.jd-sum-row', { hasText: 'featureFlags[0].rollout' }).click();
+    assert.equal(await pkg.locator('[data-path="featureFlags[0].rollout"]').isVisible(), true);
+    await shot('mock-package-json-rich-diff', pkg);
+  });
+
+  it('shows a JSON tree preview with expand/collapse all', async () => {
+    const pkg = article('package.json');
+    await pkg.locator('
