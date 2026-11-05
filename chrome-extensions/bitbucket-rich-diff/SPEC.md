@@ -200,9 +200,9 @@ Files over 2 MB are refused with a clear message.
 ## Testing
 
 | Layer | Command | What it covers |
-|---|---|
+|---|---|---|
 | Unit (Vitest + jsdom) | `npm test` | HTML word diff, alignment, markdown track changes (paragraphs, lists, tables, code, folding, escaping), JSON parse/diff/render, Bitbucket client (pagination, 404/403, size cap), URL resolution, path detection, settings, preview builder, `RichDiffApp` with a fake client (injection, defaults, disabled types, click isolation, re-render, error path, navigation away) |
-| End-to-end (Playwright + Chromium + built extension) | `npm run test:e2e` | **Mock PR** served at a real `bitbucket.org` URL through request interception, mirroring the Bitbucket DOM and API: every tab, toolbar control, persistence, aligned side by side, added/deleted/invalid files, header re-render. **Real public PR** ([atlassian-connect-express #572](https://bitbucket.org/atlassian/atlassian-connect-express/pull-requests/572/diff)) as a smoke test. Skip it with `E2E_SKIP_REAL=1`. Screenshots go to `test-results/`. |
+| End-to-end (Playwright + Chromium + built extension) | `npm run test:e2e` | **Mock PR** served at a real `bitbucket.org` URL through request interception, mirroring the Bitbucket DOM and API: every tab, toolbar control, persistence, aligned side by side, added/deleted/invalid files, header re-render. **Real public PR** ([atlassian-connect-express #572](https://bitbucket.org/atlassian/atlassian-connect-express/pull-requests/572/diff)) as a smoke test. Skip it with `E2E_SKIP_REAL=1`. Screenshots go to `test-results/`.
 
 Branded Google Chrome 137+ ignores `--load-extension`, so the e2e suite uses Playwright's Chromium
 (`npx playwright-core install chromium`).
