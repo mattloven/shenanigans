@@ -22,17 +22,17 @@ left of "Viewed":
 
 | File type | Tabs |
 |---|---|
-| Markdown | **Diff** · **Rich diff** · **Preview** |
-| JSON | **Diff** · **Rich diff** · **Tree** |
+| Markdown | **Diff** · **Rich Diff** · **Preview** |
+| JSON | **Diff** · **Rich Diff** · **Tree** |
 
 - **Diff**: Bitbucket's own diff, untouched, including inline comments.
 - The rich panel replaces the diff body in place. Collapsing the file in Bitbucket also hides the panel.
 - Tab clicks never toggle Bitbucket's collapse-on-header-click.
 - Left and right arrow keys move between tabs.
 - The chosen tab is remembered per file while the PR stays open (including across Bitbucket re-renders).
-- The default tab per file type is configurable. It defaults to **Rich diff**.
+- The default tab per file type is configurable. It defaults to **Rich Diff**.
 
-### Markdown: Rich diff ("track changes")
+### Markdown: Rich Diff ("track changes")
 
 The new version is rendered like a document, with changes marked the way Word's Track Changes does:
 
@@ -47,7 +47,7 @@ The new version is rendered like a document, with changes marked the way Word's 
     old and new checkbox.
   - **Tables**: row by row, with cell-level word changes. If the column layout changed, the whole
     table is shown as replaced.
-  - **Code blocks**: line by line, with +/− markers.
+  - **Code blocks**: line by line, with +− markers.
   - Inline code and images are atomic: they are shown as replaced, never split.
 - Toolbar (sticky below the file header):
   - Change counts (+ added, − removed, ~ changed).
@@ -67,13 +67,13 @@ A layout switch in the toolbar offers **Old · New · Side by side** (default: S
 remembered):
 
 - **Side by side**: a two-column grid where matching sections share a row. Sections are aligned
-  using the same block matching as Rich diff, so the columns don't drift apart. A section that
+  using the same block matching as Rich Diff, so the columns don't drift apart. A section that
   exists on only one side leaves a gap on the other side.
 - **Old** / **New**: one version, full width.
 - Each column is labelled Before/After with its short commit hash. Renamed files also show the old path.
 - Added files offer only New, and deleted files only Old. The unavailable options are disabled.
 
-### JSON: Rich diff (structural)
+### JSON: Rich Diff (structural)
 
 - A **summary table** of every leaf change: path (`dependencies.express`, `featureFlags[0].rollout`,
   `["my-key"]`), change type, and before/after values. Clicking a row jumps to that row in the tree.
@@ -106,7 +106,8 @@ A **Hide** button sits immediately to the left of the Files changed cog (the but
 - **Hide generated files.** Lockfiles, `*.min.js`, `*.min.css`, and generated C# such as `*.Designer.cs` and `*.g.cs`.
 - **Hide comment-only files.** A file whose added and removed lines are all comments.
 - **Hide pattern.** A regular expression tested against the full path, each folder name, and the file name. An invalid pattern hides nothing.
-- Hidden files stay in the page. The Hide flyout (beside the cog) shows the breakdown — how many files, which category, and the `+ −` counts — with **Show** / **Hide** to bring them back for this visit. Nothing is inserted into the file tree for that summary: Bitbucket re-renders the sidebar and would duplicate any node we add there. A folder these rules hide keeps its **Hidden** pill on the existing directory row.
+- Hidden files stay in the page. The Hide flyout (beside the cog) shows the breakdown — how many files, which category, and the `+ −` counts — with **Show** / **Hide** to bring them back for this visit. Nothing is inserted into the file tree for that summary: Bitbucket re-renders the sidebar and would duplicate any node we add there. A folder these rules hide keeps its **Hidden** pill, and a revealed file keeps its category pill. Both sit in front of the folder or file icon, on the same row. Each kind has its own colour: tests purple, projects teal, generated orange, docs green, comments grey, extensions yellow, pattern red, and Hidden blue.
+- **Stats** is the next tab in the pull request tab list, after **Commits** (Overview, Files changed, Commits, Stats). It is not added to the repository sidebar. It opens a summary of the whole pull request: files, lines added (green) and removed (red), markdown files, test files and the tests inside them, project files, and generated files.
 - While files are hidden, Bitbucket's counters keep both numbers: actual (original total minus hidden) and the real total stored on the node the first time we see it. `0 of 14 files viewed` becomes `0 of 12 viewed · 14 files`, and `14 files changed` becomes `12 of 14 files changed`. The viewed numerator counts only files still showing. **Show**, or clearing the rule, restores the original text exactly.
 - Opening a test file collapses each test to its name and its own `+ −`. Click the title to read that test.
 - The menu reports how many files are hidden.
