@@ -102,7 +102,10 @@ describe('mountFileFilters', () => {
 
     document.querySelector('.bbrd-filters .bbrd-hidden-toggle').click();
     expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
-    expect(document.querySelector('a[href="#chg-README.md"]').closest('li').querySelector('.bbrd-cat').textContent).toBe('Docs');
+    const readme = document.querySelector('a[href="#chg-README.md"]');
+    expect(readme.firstElementChild.classList.contains('bbrd-cat')).toBe(true);
+    expect(readme.firstElementChild.dataset.kind).toBe('docs');
+    expect(readme.firstElementChild.textContent).toBe('Docs');
     expect(document.querySelector('[data-qa="files-viewed-count"]').textContent).toBe('0 of 2 files viewed');
     expect(document.querySelector('[data-qa="files-changed-count"]').textContent).toBe('2 files changed');
 
@@ -151,6 +154,8 @@ describe('mountFileFilters', () => {
     mountFileFilters(document, { ...DEFAULT_SETTINGS, hideTestFolders: true }, onChange);
     mountFileFilters(document, { ...DEFAULT_SETTINGS, hideTestFolders: true }, onChange);
     expect(folder().querySelectorAll('.bbrd-hidden-pill')).toHaveLength(1);
+    expect(folder().firstElementChild.classList.contains('bbrd-hidden-pill')).toBe(true);
+    expect(folder().firstElementChild.nextElementSibling.getAttribute('aria-label')).toBe('Directory');
     expect(folder().querySelector('.bbrd-hidden-pill').textContent).toBe('Hidden');
     expect(folder().closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
     expect(src().querySelector('.bbrd-hidden-pill')).toBeNull();
