@@ -82,7 +82,7 @@ describe('stats summary', () => {
     const lines = document.querySelector('[data-stat="lines"] strong');
     expect(lines.querySelector('.bbrd-add').textContent).toBe('+17,440');
     expect(lines.querySelector('.bbrd-del').textContent).toBe('−0');
-    expect(panel.querySelector('.bbrd-stats-lead')).toBeNull();
+    expect(document.querySelector('.bbrd-stats-lead')).toBeNull();
     expect(lines.querySelector('.bbrd-add').textContent).toBe('+17,440');
   });
 });
