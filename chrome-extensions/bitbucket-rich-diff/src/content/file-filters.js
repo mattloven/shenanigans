@@ -325,4 +325,83 @@ function syncPanel(panel, settings) {
   if (collapse) {
     const collapseOn = settings.hideSummaryComments ? false : !!settings.collapseSummaryComments;
     if (collapse.checked !== collapseOn) collapse.checked = collapseOn;
-    lockCollapse(pan
+    lockCollapse(panel, settings.hideSummaryComments);
+  }
+  if (tests.checked !== settings.hideTestFolders) tests.checked = settings.hideTestFolders;
+  if (projects.checked !== settings.hideProjects) projects.checked = settings.hideProjects;
+  if (generated.checked !== settings.hideGenerated) generated.checked = settings.hideGenerated;
+  if (commentFiles.checked !== settings.hideCommentFiles) commentFiles.checked = settings.hideCommentFiles;
+  const extensions = panel.querySelector('[data-filter="hiddenExtensions"]');
+  const text = settings.hiddenExtensions.join(', ');
+  if (document.activeElement !== extensions && extensions.value !== text) extensions.value = text;
+  const pattern = panel.querySelector('[data-filter="hidePattern"]');
+  const workflow = panel.querySelector('[data-workflow]');
+  if (workflow instanceof HTMLSelectElement) paintWorkflowSelect(workflow, settings);
+  if (document.activeElement !== pattern && pattern.value !== settings.hidePattern) pattern.value = settings.hidePattern;
+  const invalid = settings.hidePattern.trim() !== '' && !compileHidePattern(settings.hidePattern);
+  pattern.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+  pauseFileFilters(panel, Boolean(activeReviewGroup()));
+}
+
+/**
+ * @param {HTMLSelectElement} select
+ * @param {{ reviewWorkflows?: { id: string, name: string }[], activeReviewWorkflow?: string }} settings
+ */
+function paintWorkflowSelect(select, settings) {
+  const workflows = Array.isArray(settings.reviewWorkflows) && settings.reviewWorkflows.length
+    ? settings.reviewWorkflows
+    : [{ id: 'dotnet', name: '.NET Workflow' }];
+  const active = workflows.some((item) => item.id === settings.activeReviewWorkflow) ? settings.activeReviewWorkflow : workflows[0].id;
+  const signature = `${workflows.map((item) => `${item.id}\t${item.name}`).join('\n')}\n${active}`;
+  if (select.dataset.signature === signature) return;
+  select.dataset.signature = signature;
+  select.replaceChildren();
+  for (const workflow of workflows) {
+    const option = select.ownerDocument.createElement('option');
+    option.value = workflow.id;
+    option.textContent = workflow.name;
+    select.append(option);
+  }
+  select.value = active ?? workflows[0].id;
+}
+
+/** A selected review group is the only file filter. The checkboxes stay put and come back when the group is cleared. */
+function pauseFileFilters(panel, paused) {
+  for (const key of FILE_FILTERS) {
+    const input = panel.querySelector(`[data-filter="${key}"]`);
+    if (!(input instanceof HTMLInputElement)) continue;
+    input.disabled = paused;
+    input.closest('label')?.classList.toggle('bbrd-check-disabled', paused);
+  }
+}
+
+/** Hide and collapse are alternatives. Hiding summary comments turns collapse off and leaves it unavailable. */
+function lockCollapse(panel, hideSummary) {
+  const collapse = panel.querySelector('[data-filter="collapseSummaryComments"]');
+  if (!(collapse instanceof HTMLInputElement)) return;
+  collapse.disabled = hideSummary;
+  collapse.closest('label')?.classList.toggle('bbrd-check-disabled', hideSummary);
+  if (hideSummary && collapse.checked) collapse.checked = false;
+}
+
+function applyHidden(root, settings, commentOnly) {
+  /** @type {Partial<Record<import('../core/file-filter.js').HideCategory, number>>} */
+  const counts = {};
+  for (const key of CATEGORY_ORDER) counts[key] = 0;
+  const lines = { added: 0, removed: 0 };
+  const seen = new Set();
+  const lens = activeReviewGroup();
+  for (const link of root.querySelectorAll('a[href*="#chg-"]')) {
+    const path = pathFromFileLink(link.getAttribute('href'));
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    const item = link.closest('li') ?? link;
+    const category = fileCategory(path, settings, commentOnly);
+    if (category && !lens) {
+      counts[category] += 1;
+      const stat = readStat(item);
+      lines.added += stat.added;
+      lines.removed += stat.removed;
+    }
+    setHidden(item, Boolean(category) && !revealed && !lens);
+    syncChip(item, revealed &&
