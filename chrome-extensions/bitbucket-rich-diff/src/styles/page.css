@@ -136,6 +136,15 @@ button.bbrd-menu-button:focus-visible {
   color: var(--ds-text-subtle, #505258);
 }
 
+.bbrd-hidden-actions {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  text-align: right;
+}
+
 .bbrd-check {
   display: flex;
   align-items: center;
@@ -261,25 +270,6 @@ button:has(> .bbrd-hidden-pill) {
   max-width: 100%;
 }
 
-.bbrd-hidden-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 8px 0;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: var(--ds-background-neutral, #0515240f);
-  color: var(--ds-text-subtle, #505258);
-  font-family: var(--ds-font-family-body, inherit);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.bbrd-hidden-summary {
-  min-width: 0;
-}
-
 button.bbrd-hidden-toggle,
 button.bbrd-comment-fold,
 button.bbrd-test-fold {
@@ -295,7 +285,7 @@ button.bbrd-test-fold {
 
 button.bbrd-hidden-toggle {
   flex: none;
-  padding: 0 4px;
+  padding: 0;
 }
 
 button.bbrd-comment-fold,
