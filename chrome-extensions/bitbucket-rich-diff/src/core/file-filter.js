@@ -47,6 +47,28 @@ const GENERATED_NAMES = new Set([
 
 const GENERATED_FILE = /\.(?:min\.js|min\.css|designer\.cs|g\.cs|g\.i\.cs|generated\.cs)$/i;
 
+function fileName(path) {
+  const segments = String(path ?? '').split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] ?? '';
+}
+
+/** @param {string | null | undefined} path */
+export function isProjectFile(path) {
+  return PROJECT_FILE.test(fileName(path));
+}
+
+/** @param {string | null | undefined} path */
+export function isGeneratedFile(path) {
+  const name = fileName(path);
+  return GENERATED_NAMES.has(name.toLowerCase()) || GENERATED_FILE.test(name);
+}
+
+/** @param {string | null | undefined} path */
+export function isMarkdownFile(path) {
+  const lower = String(path ?? '').toLowerCase();
+  return MARKDOWN_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
 /** @typedef {'projects' | 'tests' | 'generated' | 'docs' | 'extensions' | 'pattern' | 'comments'} HideCategory */
 
 export const CATEGORY_ORDER = ['tests', 'projects', 'generated', 'docs', 'comments', 'extensions', 'pattern'];
