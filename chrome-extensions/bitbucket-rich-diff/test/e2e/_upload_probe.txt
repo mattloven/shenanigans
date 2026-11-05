@@ -1,1 +1,0 @@
-file:///tmp/bbrd-mcp/e2e-ready.mjs
