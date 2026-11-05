@@ -5,6 +5,7 @@ import { commentOnlyPaths, updateCommentMasks } from './comment-mask.js';
 import { installDiffWheel } from './diff-scroll.js';
 import { FileView } from './file-view.js';
 import { mountFileFilters, resetHiddenReveal } from './file-filters.js';
+import { mountReviewGroups, resetReviewGroup } from './review-groups.js';
 import { groupCounts } from './group-counts.js';
 import { clearStats, mountStatsTab } from './stats-tab.js';
 import { mountTestOutlines } from './test-outline.js';
@@ -31,6 +32,8 @@ export class RichDiffApp {
     this.stopped = false;
     const doc = this.root.nodeType === 9 ? this.root : this.root.ownerDocument ?? document;
     installDiffWheel(doc);
+    this.onReviewGroup = () => this.applyPageFilters();
+    doc.addEventListener('bbrd-review-group', this.onReviewGroup);
     this.observer.observe(this.root.body ?? this.root, { childList: true, subtree: true });
     this.scan();
   }
@@ -38,6 +41,8 @@ export class RichDiffApp {
   stop() {
     this.stopped = true;
     this.observer.disconnect();
+    const doc = this.root.nodeType === 9 ? this.root : this.root.ownerDocument ?? document;
+    if (this.onReviewGroup) doc.removeEventListener('bbrd-review-group', this.onReviewGroup);
     for (const view of this.views.values()) view.destroy();
     this.views.clear();
   }
@@ -68,6 +73,7 @@ export class RichDiffApp {
     const pr = parsePrUrl(this.location.href);
     if (!pr) {
       resetHiddenReveal();
+      resetReviewGroup();
       clearStats(this.root);
       if (this.views.size) this.stop();
       this.context = null;
@@ -75,6 +81,7 @@ export class RichDiffApp {
     }
     if (!this.context || prKey(this.context.pr) !== prKey(pr)) {
       resetHiddenReveal();
+      resetReviewGroup();
       clearStats(this.root);
       for (const view of this.views.values()) view.destroy();
       this.views.clear();
@@ -107,9 +114,11 @@ export class RichDiffApp {
   }
 
   applyPageFilters() {
+    if (this.settings.hideReviewGroups) resetReviewGroup();
     updateCommentMasks(this.root, this.settings);
     mountStatsTab(this.root);
     mountFileFilters(this.root, this.settings, (key, value) => this.persistSetting(key, value), commentOnlyPaths(this.root));
+    mountReviewGroups(this.root, parsePrUrl(this.location.href), null, this.settings);
     mountTestOutlines(this.root);
     groupCounts(this.root);
   }
