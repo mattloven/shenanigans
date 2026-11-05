@@ -113,9 +113,10 @@ function articleHtml(file) {
 
 function pageHtml() {
   return `<!doctype html><html><head><meta charset="utf-8"><title>Mock PR</title><style>
-    body { margin: 0; font: 14px -apple-system, Segoe UI, Roboto, sans-serif; color: #172b4d; }
-    .top { height: 60px; border-bottom: 1px solid #ddd; display: flex; align-items: center; padding: 0 24px; font-weight: 600; }
-    .page { display: flex; height: calc(100vh - 61px); }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font: 14px -apple-system, Segoe UI, Roboto, sans-serif; color: #172b4d; }
+    .top { height: 60px; flex: none; border-bottom: 1px solid #ddd; display: flex; align-items: center; padding: 0 24px; font-weight: 600; }
+    .diff-shell { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .page { display: flex; flex: 1; min-height: 0; }
     .sidebar { width: 300px; flex: none; overflow: auto; border-right: 1px solid #dfe1e6; padding: 12px; box-sizing: border-box; }
     .sidebar ul { margin: 0; padding: 0; }
     .sidebar li { list-style: none; margin: 2px 0; }
@@ -136,13 +137,15 @@ function pageHtml() {
   </style></head><body>
     <div class="top">acme / payments — Pull request #42: Payments docs refresh</div>
     <nav class="repo-nav" aria-label="Repository"><a href="/acme/payments/src">Source</a><a href="/acme/payments/commits">Commits</a><a href="/acme/payments/branches">Branches</a></nav>
-    <nav aria-label="Pull request"><div class="pr-tabs" role="tablist"><a role="tab" href="/acme/payments/pull-requests/42/overview">Overview</a><a role="tab" href="/acme/payments/pull-requests/42/diff" aria-current="page">Files changed</a><a role="tab" href="/acme/payments/pull-requests/42/commits">Commits</a></div></nav>
+    <nav aria-label="Pull request"><div class="pr-tabs" role="tablist"><a role="tab" href="/acme/payments/pull-requests/42/overview">Overview</a><a role="tab" href="/acme/payments/pull-requests/42/diff" aria-current="page">Files changed</a><a role="tab" href="/acme/payments/pull-requests/42/commits">Commits</a></div><button type="button">Comments (3 unresolved)</button><div>Unresolved Comments (3)</div><div>Resolved Comments (1)</div></nav>
+    <div class="diff-shell">
     <div class="page">
-      <aside class="sidebar"><div class="sidebar-head"><span data-qa="files-changed-count">${MOCK_FILES.length} files changed</span><button type="button">Filter files</button></div><ul role="list" id="file-list"></ul></aside>
+      <aside id="file-tree" class="sidebar"><div class="sidebar-head"><span data-qa="files-changed-count">${MOCK_FILES.length} files changed</span><button type="button">Filter files</button></div><div class="lines-updated"><span><h5>Lines updated</h5></span><div><span>+1404</span><span>-82</span></div></div><ul role="list" id="file-list"></ul></aside>
       <div class="scroller">
         <div class="diff-bar"><span data-qa="files-viewed-count">0 of ${MOCK_FILES.length} files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button></div>
         <div id="files"></div>
       </div>
+    </div>
     </div>
     <script>
       const files = ${JSON.stringify(MOCK_FILES.map((f) => ({ path: f.path, html: articleHtml(f) })))};
