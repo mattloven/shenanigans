@@ -102,8 +102,12 @@ A **Hide** button sits immediately to the left of the Files changed cog (the but
 - **Hide .md files.** Also hides `.markdown`, `.mdown`, `.mkd` and `.mkdn`. The file disappears from the list and from the diff.
 - **Hide extensions.** A text field such as `.svg, .lock, .min.js`. A file matches when its path ends with one of those suffixes.
 - **Hide test projects.** Hides every file inside a folder whose name ends in `Tests`, such as `Foo.Tests`, `Foo.UnitTests` and `Foo.IntegrationTests`.
+- **Hide solution and project files.** `.sln`, `.slnx`, `.slnf`, and every MSBuild project type (`.csproj`, `.fsproj`, `.vbproj`, `.vcxproj`, and the rest of `*proj`).
+- **Hide generated files.** Lockfiles, `*.min.js`, `*.min.css`, and generated C# such as `*.Designer.cs` and `*.g.cs`.
+- **Hide comment-only files.** A file whose added and removed lines are all comments.
 - **Hide pattern.** A regular expression tested against the full path, each folder name, and the file name. An invalid pattern hides nothing.
-- A folder these rules hide stays in the file tree. A **Hidden** pill on that folder shows the extension hid it.
+- Hidden files stay in the page. A bar at the bottom of the file list and the diff says how many files, which category, and the `+ −` counts, with **Show** to bring them back for this visit. A folder these rules hide keeps its **Hidden** pill.
+- Opening a test file collapses each test to its name and its own `+ −`. Click the title to read that test.
 - The menu reports how many files are hidden.
 
 ### Code comments in diffs
@@ -112,7 +116,7 @@ For JavaScript, TypeScript (`.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`
 
 - **Hide code comments** removes `//` line comments and `/* … */` block comments.
 - **Hide summary comments** removes documentation comments: `///` XML docs in C#, and `/** … */` JSDoc blocks in both languages. A `/***` banner stays a normal block comment.
-- A line that is only a hidden comment disappears. A trailing comment is removed and the code in front of it stays.
+- A run of lines that are only hidden comments collapses to a "N comment lines" row. Click it to read them. A trailing comment is removed and the code in front of it stays.
 - Text inside strings, template literals, C# verbatim and interpolated strings, character literals and JavaScript regexes is left alone. `http://…` inside a string is not treated as a comment.
 - Removed and added lines are read as two separate files, because a diff interleaves them. A context line is hidden only when both sides agree it is a hidden comment.
 - In side-by-side view each column is masked on its own, so an added comment can disappear while the code it replaced stays visible.
