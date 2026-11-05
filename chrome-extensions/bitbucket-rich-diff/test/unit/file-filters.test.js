@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mountFileFilters } from '../../src/content/file-filters.js';
+import { mountFileFilters, resetHiddenReveal } from '../../src/content/file-filters.js';
 import { DEFAULT_SETTINGS } from '../../src/core/settings.js';
 
 function installPage() {
@@ -24,6 +24,7 @@ function cogs() {
 
 describe('mountFileFilters', () => {
   beforeEach(() => {
+    resetHiddenReveal();
     installPage();
   });
 
@@ -89,7 +90,13 @@ describe('mountFileFilters', () => {
     expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
     expect(document.querySelector('article[aria-label="Diff of file README.md"]').classList.contains('bbrd-file-hidden')).toBe(true);
     expect(document.querySelector('a[href="#chg-src/App.cs"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
-    expect(document.querySelector('.bbrd-hidden-count').textContent).toBe('1 hidden');
+    expect(document.querySelector('.bbrd-hidden-count').textContent).toBe('1 hidden · 1 doc');
+    expect(document.querySelectorAll('.bbrd-hidden-bar')).toHaveLength(2);
+    document.querySelector('.bbrd-hidden-toggle').click();
+    expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
+    expect(document.querySelector('a[href="#chg-README.md"]').closest('li').querySelector('.bbrd-cat').textContent).toBe('Docs');
+    document.querySelector('.bbrd-hidden-toggle').click();
+    expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
     expect(document.querySelector('[data-filter="hidePattern"]').getAttribute('aria-invalid')).toBe('true');
 
     document.querySelector('.bbrd-menu-button').click();
@@ -130,5 +137,19 @@ describe('mountFileFilters', () => {
 
     mountFileFilters(document, DEFAULT_SETTINGS, onChange);
     expect(folder().querySelector('.bbrd-hidden-pill')).toBeNull();
+  });
+
+  it('puts the hidden-file bar after the whole file tree', () => {
+    document.body.innerHTML = `
+      <ul id="tree">
+        <li><a href="#chg-README.md">README.md</a></li>
+        <li>
+          <button type="button"><span role="img" aria-label="Directory"></span><span>src</span></button>
+          <ul><li><a href="#chg-src/App.cs">App.cs</a></li></ul>
+        </li>
+      </ul>
+      <button type="button"><span>Global diff settings</span></button>`;
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, hideMarkdown: true }, vi.fn());
+    expect(document.querySelector('.bbrd-hidden-bar[data-place="list"]').previousElementSibling.id).toBe('tree');
   });
 });
