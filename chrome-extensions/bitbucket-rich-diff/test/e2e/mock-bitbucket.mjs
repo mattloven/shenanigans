@@ -26,13 +26,32 @@ export const MOCK_FILES = [
   { status: 'modified', path: 'src/app.js', old: 'const a = 1;\n', new: 'const a = 2;\n' },
   { status: 'modified', path: 'src/checkout.js', old: read('checkout-old.js'), new: read('checkout-new.js') },
   { status: 'modified', path: 'src/Payment.cs', old: read('payment-old.cs'), new: read('payment-new.cs') },
-  { status: 'added', path: 'src/Payment.Tests/ChargeTests.cs', old: null, new: 'public class ChargeTests {}\n' },
+  { status: 'added', path: 'src/Payment.Tests/ChargeTests.cs', old: null, new: '[Fact]\npublic void Charge_rejects_empty()\n{\n    Assert.Null(payment.Charge(0));\n}\n\n[Fact]\npublic void Charge_returns_receipt()\n{\n    Assert.Equal("ok", payment.Charge(10));\n}\n' },
   { status: 'added', path: 'src/Payment.UnitTests/FlowTests.cs', old: null, new: 'public class FlowTests {}\n' },
+  { status: 'added', path: 'Payment.sln', old: null, new: 'Microsoft Visual Studio Solution File\n' },
+  { status: 'added', path: 'src/Payment.csproj', old: null, new: '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' },
+  { status: 'modified', path: 'pnpm-lock.yaml', old: 'lock: 1\n', new: 'lock: 2\n' },
   { status: 'modified', path: 'assets/logo.svg', old: '<svg></svg>\n', new: '<svg id="logo"></svg>\n' },
   { status: 'modified', path: 'config/broken.json', old: '{"a": 1}\n', new: '{"a": 1,,}\n' },
 ];
 
 const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function lineStats(file) {
+  const patch = structuredPatch(file.path, file.path, file.old ?? '', file.new ?? '', '', '', { context: 3 });
+  let added = 0;
+  let removed = 0;
+  for (const hunk of patch.hunks) {
+    for (const raw of hunk.lines) {
+      if (raw[0] === '+') added += 1;
+      else if (raw[0] === '-') removed += 1;
+    }
+  }
+  const parts = [];
+  if (added) parts.push(`${added} ${added === 1 ? 'line' : 'lines'} added`);
+  if (removed) parts.push(`${removed} ${removed === 1 ? 'line' : 'lines'} removed`);
+  return parts.join(', ');
+}
 
 function fileListHtml(files) {
   const root = { dirs: new Map(), files: [] };
@@ -51,7 +70,8 @@ function fileListHtml(files) {
       html += `<li><button type="button" aria-expanded="true"><span role="img" aria-label="Directory"></span><span class="dirname">${escape(child.name)}</span></button><ul role="list">${render(child)}</ul></li>`;
     }
     for (const file of node.files) {
-      html += `<li><a href="#chg-${escape(file.path)}"><span>${escape(file.path.split('/').pop())}</span></a></li>`;
+      const stat = lineStats(file);
+      html += `<li><a href="#chg-${escape(file.path)}"><span>${escape(file.path.split('/').pop())}</span>${stat ? `<span class="stat"> ${escape(stat)}</span>` : ''}</a></li>`;
     }
     return html;
   };
@@ -116,27 +136,48 @@ function pageHtml() {
   </style></head><body>
     <div class="top">acme / payments — Pull request #42: Payments docs refresh</div>
     <div class="page">
-      <aside class="sidebar"><div><button type="button">Filter files</button></div><ul role="list" id="file-list"></ul></aside>
+      <aside class="sidebar"><div class="sidebar-head"><span data-qa="files-changed-count">${MOCK_FILES.length} files changed</span><button type="button">Filter files</button></div><ul role="list" id="file-list"></ul></aside>
       <div class="scroller">
-        <div class="diff-bar"><span>0 of 11 files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button></div>
+        <div class="diff-bar"><span data-qa="files-viewed-count">0 of ${MOCK_FILES.length} files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button></div>
         <div id="files"></div>
       </div>
     </div>
     <script>
       const files = ${JSON.stringify(MOCK_FILES.map((f) => ({ path: f.path, html: articleHtml(f) })))};
+      const fileListMarkup = ${JSON.stringify(fileListHtml(MOCK_FILES))};
+      const fileCount = ${MOCK_FILES.length};
       // Bitbucket renders file diffs asynchronously after the SPA boots.
       setTimeout(() => {
         document.getElementById('files').innerHTML = files.map((f) => f.html).join('');
-        document.getElementById('file-list').innerHTML = ${JSON.stringify(fileListHtml(MOCK_FILES))};
+        document.getElementById('file-list').innerHTML = fileListMarkup;
         for (const header of document.querySelectorAll('.file-header')) {
           header.addEventListener('click', () => header.closest('article').classList.toggle('collapsed'));
         }
       }, 300);
       window.__replaceDiffToolbar = () => {
         const bar = document.querySelector('.diff-bar');
-        const clone = bar.cloneNode(true);
-        clone.querySelectorAll('.bbrd-menu-host').forEach((node) => node.remove());
-        bar.replaceWith(clone);
+        const next = document.createElement('div');
+        next.className = 'diff-bar';
+        next.innerHTML = '<span data-qa="files-viewed-count">0 of ' + fileCount + ' files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button>';
+        bar.replaceWith(next);
+      };
+      window.__replaceFileTree = () => {
+        const list = document.getElementById('file-list');
+        const next = document.createElement('ul');
+        next.id = 'file-list';
+        next.setAttribute('role', 'list');
+        next.innerHTML = fileListMarkup;
+        list.replaceWith(next);
+        const changed = document.querySelector('[data-qa="files-changed-count"]');
+        if (changed) {
+          changed.textContent = fileCount + ' files changed';
+          delete changed.dataset.bbrdChangedOriginal;
+        }
+        const viewed = document.querySelector('[data-qa="files-viewed-count"]');
+        if (viewed) {
+          viewed.textContent = '0 of ' + fileCount + ' files viewed';
+          delete viewed.dataset.bbrdViewedOriginal;
+        }
       };
       window.__rerenderHeader = (index) => {
         const header = document.querySelectorAll('[data-qa="bk-file__header"]')[index];

@@ -1,13 +1,28 @@
-import { compileHidePattern, isHiddenFile, isHiddenFolder, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
+import { CATEGORY_LABEL, CATEGORY_ORDER, compileHidePattern, fileCategory, formatHideSummary, isHiddenFolder, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
 const COG_NAME = 'Global diff settings';
 const MENU_LABEL = 'Hide files and comments';
+const VIEWED_COUNTER = /^(\d+)\s+of\s+(\d+)\s+files?\s+viewed$/i;
+const CHANGED_COUNTER = /^(\d+)\s+files?\s+changed$/i;
+const ORIGINAL_VIEWED = 'bbrdViewedOriginal';
+const ORIGINAL_CHANGED = 'bbrdChangedOriginal';
 
 /** @type {WeakMap<HTMLElement, (key: string, value: unknown) => void>} */
 const changeHandlers = new WeakMap();
 /** @type {WeakSet<Document>} */
 const wiredDocuments = new WeakSet();
+
+/** Shown again for this visit only. A reload, or opening another pull request, hides them once more. */
+let revealed = false;
+
+/** @type {{ root: ParentNode, settings: import('../core/settings.js').Settings, onChange: (key: string, value: unknown) => void, commentOnly: Set<string> } | null} */
+let lastApply = null;
+
+/** Forget the temporary Show, so the next pull request starts from the saved hide rules. */
+export function resetHiddenReveal() {
+  revealed = false;
+}
 
 /**
  * Puts one Hide menu immediately to the left of Bitbucket's Files changed cog and hides matching
@@ -17,9 +32,11 @@ const wiredDocuments = new WeakSet();
  * @param {ParentNode} root
  * @param {import('../core/settings.js').Settings} settings
  * @param {(key: string, value: unknown) => void} onChange
+ * @param {Set<string>} [commentOnly] files whose whole diff is comments
  * @returns {number} how many files are hidden
  */
-export function mountFileFilters(root, settings, onChange) {
+export function mountFileFilters(root, settings, onChange, commentOnly = new Set()) {
+  lastApply = { root, settings, onChange, commentOnly };
   const doc = documentOf(root);
   ensureDismiss(doc);
   const cog = findCog(root);
@@ -41,7 +58,7 @@ export function mountFileFilters(root, settings, onChange) {
   } else {
     removeLegacyPanels(doc);
   }
-  return applyHidden(root, settings);
+  return applyHidden(root, settings, commentOnly);
 }
 
 function documentOf(root) {
@@ -135,16 +152,33 @@ function buildPanel() {
   panel.setAttribute('aria-label', MENU_LABEL);
   panel.hidden = true;
   panel.innerHTML = `
-    <div class="bbrd-filters-head"><span>Hide</span><span class="bbrd-hidden-count" aria-live="polite"></span></div>
+    <div class="bbrd-filters-head">
+      <span>Hide</span>
+      <span class="bbrd-hidden-actions">
+        <span class="bbrd-hidden-count" aria-live="polite"></span>
+        <button type="button" class="bbrd-hidden-toggle" hidden>Show</button>
+      </span>
+    </div>
     <label class="bbrd-check" title="Also hides .markdown and the other markdown extensions"><input type="checkbox" data-filter="hideMarkdown" /> Markdown files</label>
     <label class="bbrd-check" title="Line comments and block comments"><input type="checkbox" data-filter="hideCodeComments" /> Code comments</label>
     <label class="bbrd-check" title="C# documentation comments and JSDoc blocks"><input type="checkbox" data-filter="hideSummaryComments" /> Summary comments</label>
     <p class="bbrd-hint">JavaScript, TypeScript and C#</p>
     <label class="bbrd-check" title="Folders ending in Tests, such as Foo.Tests and Foo.UnitTests, and every file inside them"><input type="checkbox" data-filter="hideTestFolders" /> Test projects</label>
+    <label class="bbrd-check" title="Solution files and every project type: .sln, .slnx, .csproj, .fsproj, .vbproj, .vcxproj"><input type="checkbox" data-filter="hideProjects" /> Solution and project files</label>
+    <label class="bbrd-check" title="Lockfiles, minified code, and generated source such as Designer.cs"><input type="checkbox" data-filter="hideGenerated" /> Generated files</label>
+    <label class="bbrd-check" title="A file whose only changes are comments"><input type="checkbox" data-filter="hideCommentFiles" /> Comment-only files</label>
     <label class="bbrd-ext">Extensions <input type="text" data-filter="hiddenExtensions" placeholder="svg, lock, min.js" spellcheck="false" /></label>
     <label class="bbrd-ext">Pattern <input type="text" data-filter="hidePattern" placeholder="\\.Tests|tmp/" spellcheck="false" /></label>
     <p class="bbrd-hint">Regular expression. Matches the path, a folder, or the file name.</p>`;
-  panel.addEventListener('click', (event) => event.stopPropagation());
+  panel.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const toggle = event.target.closest('.bbrd-hidden-toggle');
+    if (!toggle || !panel.contains(toggle)) return;
+    event.preventDefault();
+    revealed = !revealed;
+    const last = lastApply;
+    if (last) mountFileFilters(last.root, last.settings, last.onChange, last.commentOnly);
+  });
   panel.addEventListener('keydown', (event) => event.stopPropagation());
   panel.addEventListener('change', (event) => {
     const input = event.target.closest('[data-filter]');
@@ -231,10 +265,16 @@ function syncPanel(panel, settings) {
   const code = panel.querySelector('[data-filter="hideCodeComments"]');
   const summary = panel.querySelector('[data-filter="hideSummaryComments"]');
   const tests = panel.querySelector('[data-filter="hideTestFolders"]');
+  const projects = panel.querySelector('[data-filter="hideProjects"]');
+  const generated = panel.querySelector('[data-filter="hideGenerated"]');
+  const commentFiles = panel.querySelector('[data-filter="hideCommentFiles"]');
   if (markdown.checked !== settings.hideMarkdown) markdown.checked = settings.hideMarkdown;
   if (code.checked !== settings.hideCodeComments) code.checked = settings.hideCodeComments;
   if (summary.checked !== settings.hideSummaryComments) summary.checked = settings.hideSummaryComments;
   if (tests.checked !== settings.hideTestFolders) tests.checked = settings.hideTestFolders;
+  if (projects.checked !== settings.hideProjects) projects.checked = settings.hideProjects;
+  if (generated.checked !== settings.hideGenerated) generated.checked = settings.hideGenerated;
+  if (commentFiles.checked !== settings.hideCommentFiles) commentFiles.checked = settings.hideCommentFiles;
   const extensions = panel.querySelector('[data-filter="hiddenExtensions"]');
   const text = settings.hiddenExtensions.join(', ');
   if (document.activeElement !== extensions && extensions.value !== text) extensions.value = text;
@@ -244,28 +284,161 @@ function syncPanel(panel, settings) {
   pattern.setAttribute('aria-invalid', invalid ? 'true' : 'false');
 }
 
-function applyHidden(root, settings) {
-  let hidden = 0;
+function applyHidden(root, settings, commentOnly) {
+  /** @type {Partial<Record<import('../core/file-filter.js').HideCategory, number>>} */
+  const counts = {};
+  for (const key of CATEGORY_ORDER) counts[key] = 0;
+  const lines = { added: 0, removed: 0 };
   const seen = new Set();
   for (const link of root.querySelectorAll('a[href*="#chg-"]')) {
     const path = pathFromFileLink(link.getAttribute('href'));
     if (!path || seen.has(path)) continue;
     seen.add(path);
     const item = link.closest('li') ?? link;
-    const hide = isHiddenFile(path, settings);
-    if (hide) hidden += 1;
-    setHidden(item, hide);
+    const category = fileCategory(path, settings, commentOnly);
+    if (category) {
+      counts[category] += 1;
+      const stat = readStat(item);
+      lines.added += stat.added;
+      lines.removed += stat.removed;
+    }
+    setHidden(item, Boolean(category) && !revealed);
+    syncChip(item, revealed && category ? category : null);
   }
   for (const article of findFileDiffs(root)) {
-    setHidden(article, isHiddenFile(getFilePath(article), settings));
+    const category = fileCategory(getFilePath(article), settings, commentOnly);
+    setHidden(article, Boolean(category) && !revealed);
   }
   markHiddenFolders(root, settings);
-  const count = root.querySelector?.('.bbrd-filters .bbrd-hidden-count') ?? document.querySelector('.bbrd-filters .bbrd-hidden-count');
-  if (count) {
-    const text = hidden === 0 ? '' : `${hidden} hidden`;
-    if (count.textContent !== text) count.textContent = text;
+  const hiddenCount = CATEGORY_ORDER.reduce((sum, key) => sum + (counts[key] || 0), 0);
+  const summary = formatHideSummary(counts, lines);
+  syncFlyoutSummary(root, summary);
+  // Drop any leftover Show bars from older builds; Bitbucket re-renders the file tree and would duplicate them.
+  for (const bar of documentOf(root).querySelectorAll('.bbrd-hidden-bar')) bar.remove();
+  syncFileCounters(root, hiddenCount);
+  return hiddenCount;
+}
+
+function syncFlyoutSummary(root, summary) {
+  const panel = documentOf(root).querySelector('.bbrd-filters') ?? document.querySelector('.bbrd-filters');
+  if (!panel) return;
+  const count = panel.querySelector('.bbrd-hidden-count');
+  if (count && count.textContent !== summary) count.textContent = summary;
+  const toggle = panel.querySelector('.bbrd-hidden-toggle');
+  if (!toggle) return;
+  if (!summary) {
+    toggle.hidden = true;
+    return;
   }
-  return hidden;
+  toggle.hidden = false;
+  const text = revealed ? 'Hide' : 'Show';
+  const name = revealed ? 'Hide hidden files' : 'Show hidden files';
+  if (toggle.textContent !== text) toggle.textContent = text;
+  toggle.setAttribute('aria-label', name);
+}
+
+function readStat(element) {
+  const text = element?.textContent ?? '';
+  return { added: sumPhrase(text, /(\d+)\s+lines?\s+added/gi), removed: sumPhrase(text, /(\d+)\s+lines?\s+removed/gi) };
+}
+
+function sumPhrase(text, pattern) {
+  let total = 0;
+  for (const match of text.matchAll(pattern)) total += Number(match[1]);
+  return total;
+}
+
+function syncChip(item, category) {
+  let chip = item.querySelector(':scope > .bbrd-cat');
+  if (!category) {
+    chip?.remove();
+    return;
+  }
+  const label = CATEGORY_LABEL[category];
+  if (!chip) {
+    chip = item.ownerDocument.createElement('span');
+    chip.className = 'bbrd-cat';
+    item.append(chip);
+  }
+  if (chip.textContent !== label) chip.textContent = label;
+}
+
+/**
+ * While files are hidden, show actual (real minus hidden) beside the original Bitbucket total.
+ * "0 of 14 files viewed" becomes "0 of 12 viewed · 14 files". "14 files changed" becomes
+ * "12 of 14 files changed". The original string is stored the first time we see the node and
+ * restored exactly when nothing is hidden. A later scan never treats rewritten text as the source.
+ * @param {ParentNode} root
+ * @param {number} hiddenCount
+ */
+function syncFileCounters(root, hiddenCount) {
+  const doc = documentOf(root);
+  const exclude = Boolean(hiddenCount) && !revealed;
+  const viewedVisible = exclude ? countViewedVisible(root) : null;
+  for (const node of counterLeaves(doc)) {
+    rewriteCounter(node, VIEWED_COUNTER, ORIGINAL_VIEWED, exclude, hiddenCount, (viewed, total) => {
+      const actual = Math.max(0, total - hiddenCount);
+      const nextViewed = viewedVisible == null ? Math.min(viewed, actual) : Math.min(viewedVisible, actual);
+      const word = total === 1 ? 'file' : 'files';
+      return `${nextViewed} of ${actual} viewed · ${total} ${word}`;
+    });
+    rewriteCounter(node, CHANGED_COUNTER, ORIGINAL_CHANGED, exclude, hiddenCount, (_count, total, source) => {
+      const actual = Math.max(0, total - hiddenCount);
+      const word = /\bfile\b/i.test(source) && !/\bfiles\b/i.test(source) ? 'file' : 'files';
+      return `${actual} of ${total} ${word} changed`;
+    });
+  }
+}
+
+function counterLeaves(doc) {
+  if (!doc.body?.querySelectorAll) return [];
+  const out = [];
+  for (const el of doc.body.querySelectorAll('span, div, p, strong, em, label, a, li, h1, h2, h3, h4, button')) {
+    if (!(el instanceof HTMLElement)) continue;
+    if (el.closest('.bbrd-filters, .bbrd-menu-host, .bbrd-hidden-bar, .bbrd-tabs, [data-qa="bk-file__content"]')) continue;
+    if ([...el.children].some((child) => child.nodeType === 1 && !(child instanceof HTMLElement && child.classList.contains('vh')))) continue;
+    out.push(el);
+  }
+  return out;
+}
+
+/**
+ * @param {HTMLElement} node
+ * @param {RegExp} pattern
+ * @param {string} datasetKey
+ * @param {boolean} exclude
+ * @param {number} hiddenCount
+ * @param {(viewedOrCount: number, total: number, source: string) => string} format
+ */
+function rewriteCounter(node, pattern, datasetKey, exclude, hiddenCount, format) {
+  const stored = node.dataset[datasetKey];
+  const current = (node.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const source = stored || current;
+  const match = source.match(pattern);
+  if (!match) return;
+  if (!stored) node.dataset[datasetKey] = source;
+  if (!exclude || !hiddenCount) {
+    if (node.textContent !== node.dataset[datasetKey]) node.textContent = node.dataset[datasetKey];
+    return;
+  }
+  const first = Number(match[1]);
+  const total = match[2] != null ? Number(match[2]) : first;
+  const next = format(first, total, source);
+  if (node.textContent !== next) node.textContent = next;
+}
+
+/** Checked Viewed boxes on files that are still showing. Null when the page has no such boxes, so the original numerator is kept. */
+function countViewedVisible(root) {
+  let total = 0;
+  let sawBox = false;
+  for (const article of findFileDiffs(root)) {
+    const box = article.querySelector('.file-header input[type="checkbox"], [data-qa="bk-file__header"] input[type="checkbox"], label input[type="checkbox"]');
+    if (!(box instanceof HTMLInputElement)) continue;
+    sawBox = true;
+    if (article.classList.contains('bbrd-file-hidden')) continue;
+    if (box.checked) total += 1;
+  }
+  return sawBox ? total : null;
 }
 
 function setHidden(element, hide) {

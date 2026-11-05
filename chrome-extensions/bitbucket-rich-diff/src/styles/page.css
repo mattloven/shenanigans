@@ -136,6 +136,15 @@ button.bbrd-menu-button:focus-visible {
   color: var(--ds-text-subtle, #505258);
 }
 
+.bbrd-hidden-actions {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  text-align: right;
+}
+
 .bbrd-check {
   display: flex;
   align-items: center;
@@ -261,8 +270,74 @@ button:has(> .bbrd-hidden-pill) {
   max-width: 100%;
 }
 
+button.bbrd-hidden-toggle,
+button.bbrd-comment-fold,
+button.bbrd-test-fold {
+  appearance: none;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ds-link, #1868db);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.bbrd-hidden-toggle {
+  flex: none;
+  padding: 0;
+}
+
+button.bbrd-comment-fold,
+button.bbrd-test-fold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 8px;
+  text-align: left;
+  color: var(--ds-text-subtle, #505258);
+  background: var(--ds-background-neutral, #f1f2f4);
+}
+
+button.bbrd-test-fold {
+  font-weight: 600;
+  color: var(--ds-text, #292a2e);
+}
+
+.bbrd-test-stat {
+  flex: none;
+  color: var(--ds-text-subtlest, #6b6e76);
+  font-weight: 500;
+}
+
+.bbrd-cat {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0 6px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--ds-background-neutral, #0515240f);
+  color: var(--ds-text-subtle, #505258);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  vertical-align: middle;
+}
+
 .bbrd-file-hidden,
-.bbrd-hide-line {
+.bbrd-hide-line,
+.bbrd-test-collapsed {
+  display: none !important;
+}
+
+.bbrd-hide-line.bbrd-comment-open {
+  display: block !important;
+}
+
+.bbrd-test-collapsed.bbrd-hide-line.bbrd-comment-open {
   display: none !important;
 }
 

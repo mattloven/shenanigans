@@ -251,6 +251,11 @@ describe('mock pull request', () => {
     assert.equal(await article('README.md').isVisible(), true);
     assert.equal(await article('assets/logo.svg').isVisible(), true);
 
+    const viewed = page.locator('[data-qa="files-viewed-count"]');
+    const changed = page.locator('[data-qa="files-changed-count"]');
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+    assert.equal(await changed.textContent(), '14 files changed');
+
     await panel.getByLabel('Test projects').check();
     assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), false);
     assert.equal(await article('src/Payment.UnitTests/FlowTests.cs').isVisible(), false);
@@ -261,9 +266,41 @@ describe('mock pull request', () => {
     assert.equal(await testsFolder.locator('.bbrd-hidden-pill').textContent(), 'Hidden');
     assert.equal(await folderNamed('Payment\\.UnitTests').locator('.bbrd-hidden-pill').count(), 1);
     assert.equal(await folderNamed('src').locator('.bbrd-hidden-pill').count(), 0);
+    assert.equal(await page.locator('.bbrd-hidden-bar').count(), 0);
+    assert.equal(await page.locator('#file-list .bbrd-hidden-toggle').count(), 0);
+    assert.match(await panel.locator('.bbrd-hidden-count').textContent(), /tests/);
+    assert.equal(await viewed.textContent(), '0 of 12 viewed · 14 files');
+    assert.equal(await changed.textContent(), '12 of 14 files changed');
+    await panel.getByRole('button', { name: 'Show hidden files' }).click();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
+    assert.equal(await page.locator('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').locator('..').locator('.bbrd-cat').textContent(), 'Tests');
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+    assert.equal(await changed.textContent(), '14 files changed');
+    await openHideMenu();
+    await panel.getByRole('button', { name: 'Hide hidden files' }).click();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), false);
+    assert.equal(await viewed.textContent(), '0 of 12 viewed · 14 files');
+    await openHideMenu();
     await panel.getByLabel('Test projects').uncheck();
     assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
     assert.equal(await testsFolder.locator('.bbrd-hidden-pill').count(), 0);
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+    assert.equal(await changed.textContent(), '14 files changed');
+
+    await panel.getByLabel('Solution and project files').check();
+    assert.equal(await article('Payment.sln').isVisible(), false);
+    assert.equal(await article('src/Payment.csproj').isVisible(), false);
+    assert.match(await panel.locator('.bbrd-hidden-count').textContent(), /project/);
+    assert.equal(await viewed.textContent(), '0 of 12 viewed · 14 files');
+    assert.equal(await changed.textContent(), '12 of 14 files changed');
+    await panel.getByLabel('Solution and project files').uncheck();
+    assert.equal(await article('Payment.sln').isVisible(), true);
+    assert.equal(await viewed.textContent(), '0 of 14 files viewed');
+
+    await panel.getByLabel('Generated files').check();
+    assert.equal(await article('pnpm-lock.yaml').isVisible(), false);
+    await panel.getByLabel('Generated files').uncheck();
+    assert.equal(await article('pnpm-lock.yaml').isVisible(), true);
 
     const pattern = panel.locator('[data-filter="hidePattern"]');
     await pattern.fill('\\.svg$');
@@ -292,6 +329,29 @@ describe('mock pull request', () => {
     assert.equal(besideCog, true);
   });
 
+  it('re-applies one Hidden pill and the viewed counter after the file tree re-renders', async () => {
+    const panel = await openHideMenu();
+    await panel.getByLabel('Test projects').check();
+    const folderNamed = (name) => page.locator('#file-list button').filter({ has: page.locator('.dirname', { hasText: new RegExp(`^${name}$`) }) });
+    assert.equal(await folderNamed('Payment\\.Tests').locator('.bbrd-hidden-pill').count(), 1);
+    assert.equal(await page.locator('[data-qa="files-viewed-count"]').textContent(), '0 of 12 viewed · 14 files');
+    assert.equal(await page.locator('[data-qa="files-changed-count"]').textContent(), '12 of 14 files changed');
+
+    await page.evaluate(() => window.__replaceFileTree());
+    await folderNamed('Payment\\.Tests').locator('.bbrd-hidden-pill').waitFor();
+    assert.equal(await folderNamed('Payment\\.Tests').locator('.bbrd-hidden-pill').count(), 1);
+    assert.equal(await folderNamed('Payment\\.UnitTests').locator('.bbrd-hidden-pill').count(), 1);
+    assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.bbrd-filters').count(), 1);
+    assert.equal(await page.locator('.bbrd-hidden-bar').count(), 0);
+    assert.equal(await page.locator('[data-qa="files-viewed-count"]').textContent(), '0 of 12 viewed · 14 files');
+    assert.equal(await page.locator('[data-qa="files-changed-count"]').textContent(), '12 of 14 files changed');
+
+    await openHideMenu();
+    await panel.getByLabel('Test projects').uncheck();
+    assert.equal(await page.locator('[data-qa="files-viewed-count"]').textContent(), '0 of 14 files viewed');
+  });
+
   it('hides code comments and summary comments in JavaScript and C# diffs', async () => {
     const panel = await openHideMenu();
     const js = article('src/checkout.js');
@@ -302,6 +362,12 @@ describe('mock pull request', () => {
 
     await panel.getByLabel('Code comments').check();
     assert.equal(await shown(js, 'Reject empty amounts'), 0);
+    const commentFold = js.locator('.bbrd-comment-fold').first();
+    assert.match(await commentFold.textContent(), /comment line/);
+    await commentFold.click();
+    assert.equal(await shown(js, 'Reject empty amounts'), 1);
+    await commentFold.click();
+    assert.equal(await shown(js, 'Reject empty amounts'), 0);
     assert.equal(await js.locator('.bbrd-hide-comment:visible', { hasText: 'trailing note' }).count(), 0);
     assert.ok((await js.locator('.bbrd-hide-comment', { hasText: 'trailing note' }).count()) >= 1);
     assert.ok((await shown(js, 'gateway.capture')) >= 1);
@@ -310,6 +376,7 @@ describe('mock pull request', () => {
     assert.equal(await shown(cs, 'Reject empty amounts'), 0);
     assert.equal(await shown(cs, '<summary>'), 2);
 
+    await openHideMenu();
     await panel.getByLabel('Summary comments').check();
     assert.equal(await shown(js, '@param'), 0);
     assert.equal(await shown(cs, '<summary>'), 0);
@@ -321,6 +388,17 @@ describe('mock pull request', () => {
     await panel.getByLabel('Summary comments').uncheck();
     assert.equal(await shown(js, '@param'), 2);
     assert.equal(await shown(cs, '<summary>'), 2);
+  });
+
+  it('collapses a test file to one row per test', async () => {
+    const tests = article('src/Payment.Tests/ChargeTests.cs');
+    const folds = tests.locator('.bbrd-test-fold');
+    assert.equal(await folds.count(), 2);
+    assert.match(await folds.nth(0).locator('.bbrd-test-title').textContent(), /Charge rejects empty/);
+    assert.equal(await tests.locator('[data-key="code-line"]:visible', { hasText: 'Assert.Null' }).count(), 0);
+    await folds.nth(0).click();
+    assert.equal(await tests.locator('[data-key="code-line"]:visible', { hasText: 'Assert.Null' }).count(), 1);
+    await folds.nth(0).click();
   });
 
   it('re-attaches tabs when Bitbucket re-renders a file header', async () => {
