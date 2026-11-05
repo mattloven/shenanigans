@@ -74,13 +74,102 @@ export function updateCommentMasks(root, settings) {
     const language = commentLanguage(getFilePath(article));
     const rows = [...article.querySelectorAll('[data-key="code-line"]')];
     const signature = active && language ? `${settings.hideCodeComments}/${settings.hideSummaryComments}/${rows.length}/${textSize(rows)}` : 'off';
+    if (signature === 'off') {
+      if (article.getAttribute('data-bbrd-comments') !== 'off' || article.querySelector('.bbrd-hide-line, .bbrd-comment-fold, [data-bbrd-mask], [data-bbrd-wrap]')) {
+        clearCommentMasks(article);
+        for (const fold of article.querySelectorAll('.bbrd-comment-fold')) fold.remove();
+        article.removeAttribute('data-bbrd-folds');
+        article.setAttribute('data-bbrd-comments', 'off');
+      }
+      continue;
+    }
     // Syntax highlighting rewrites the cell after we mask it. The line text stays the
     // same, so the signature matches, but the mask marker is gone and has to be put back.
-    if (article.getAttribute('data-bbrd-comments') === signature && masksIntact(rows)) continue;
+    if (article.getAttribute('data-bbrd-comments') === signature && masksIntact(rows)) {
+      foldCommentRuns(article, getFilePath(article));
+      continue;
+    }
     clearCommentMasks(article);
+    for (const fold of article.querySelectorAll('.bbrd-comment-fold')) fold.remove();
+    article.removeAttribute('data-bbrd-folds');
     if (signature !== 'off') maskArticle(rows, language, settings);
     article.setAttribute('data-bbrd-comments', signature);
+    foldCommentRuns(article, getFilePath(article));
   }
+}
+
+/** Paths whose every added or removed line is a fully hidden comment. */
+export function commentOnlyPaths(root) {
+  const paths = new Set();
+  for (const article of findFileDiffs(root)) {
+    let changed = 0;
+    let hidden = 0;
+    for (const row of article.querySelectorAll('[data-key="code-line"]')) {
+      const isChange = [...row.querySelectorAll('[data-line-type]')].some((cell) => {
+        const type = cell.getAttribute('data-line-type');
+        return type === '+' || type === '-';
+      });
+      if (!isChange) continue;
+      changed += 1;
+      if (row.classList.contains('bbrd-hide-line')) hidden += 1;
+    }
+    if (changed > 0 && hidden === changed) {
+      const path = getFilePath(article);
+      if (path) paths.add(path);
+    }
+  }
+  return paths;
+}
+
+/** @type {Set<string>} */
+const openCommentFolds = new Set();
+
+function setCommentOpen(rows, open) {
+  for (const row of rows) {
+    row.classList.toggle('bbrd-comment-open', open);
+    for (const inner of row.querySelectorAll('.bbrd-hide-line')) inner.classList.toggle('bbrd-comment-open', open);
+  }
+}
+
+function foldCommentRuns(article, path) {
+  const rows = [...article.querySelectorAll('[data-key="code-line"]')];
+  /** @type {HTMLElement[][]} */
+  const runs = [];
+  /** @type {HTMLElement[]} */
+  let current = [];
+  for (const row of rows) {
+    if (row.classList.contains('bbrd-hide-line')) current.push(row);
+    else if (current.length) {
+      runs.push(current);
+      current = [];
+    }
+  }
+  if (current.length) runs.push(current);
+  const signature = runs.map((run) => run.length).join(',');
+  if (article.getAttribute('data-bbrd-folds') === signature && article.querySelectorAll('.bbrd-comment-fold').length === runs.length) return;
+  for (const fold of article.querySelectorAll('.bbrd-comment-fold')) fold.remove();
+  runs.forEach((run, index) => {
+    const key = `${path}\n${index}\n${(run[0].textContent ?? '').slice(0, 40)}`;
+    const fold = document.createElement('button');
+    fold.type = 'button';
+    fold.className = 'bbrd-comment-fold';
+    const count = run.length;
+    fold.textContent = `${count} comment ${count === 1 ? 'line' : 'lines'}`;
+    const open = openCommentFolds.has(key);
+    fold.setAttribute('aria-expanded', open ? 'true' : 'false');
+    setCommentOpen(run, open);
+    fold.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const next = fold.getAttribute('aria-expanded') !== 'true';
+      fold.setAttribute('aria-expanded', next ? 'true' : 'false');
+      if (next) openCommentFolds.add(key);
+      else openCommentFolds.delete(key);
+      setCommentOpen(run, next);
+    });
+    run[0].parentElement.insertBefore(fold, run[0]);
+  });
+  article.setAttribute('data-bbrd-folds', signature);
 }
 
 function masksIntact(rows) {
@@ -112,7 +201,7 @@ function lineRoot(cell, row) {
 function maskArticle(rows, language, settings) {
   const described = [];
   for (const row of rows) {
-    const cells = [...row.querySelectorAll('[data-line-type]')].map((cell) => ({
+    const cells = [...row.querySelectorAll('[data-line-type]']).map((cell) => ({
       cell,
       line: lineRoot(cell, row),
       type: lineTypeOf(cell),
