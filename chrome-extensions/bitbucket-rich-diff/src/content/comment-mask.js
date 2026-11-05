@@ -201,7 +201,7 @@ function lineRoot(cell, row) {
 function maskArticle(rows, language, settings) {
   const described = [];
   for (const row of rows) {
-    const cells = [...row.querySelectorAll('[data-line-type]']).map((cell) => ({
+    const cells = [...row.querySelectorAll('[data-line-type]')].map((cell) => ({
       cell,
       line: lineRoot(cell, row),
       type: lineTypeOf(cell),
