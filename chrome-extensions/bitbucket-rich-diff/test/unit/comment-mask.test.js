@@ -53,4 +53,43 @@ describe('updateCommentMasks', () => {
     expect(el.querySelector('[data-line-type="+"]').textContent).toContain('// trailing');
     el.remove();
   });
+
+  it('hides each side of a side-by-side C# row on its own', () => {
+    const el = document.createElement('article');
+    el.dataset.qa = 'branch-diff-file';
+    el.setAttribute('aria-label', 'Diff of file src/Payment.cs');
+    el.innerHTML = `
+      <div data-key="code-line" role="row">
+        <div data-qa="code-line"><span role="gridcell" data-line-type=" "></span></div>
+        <div data-qa="code-line"><span role="gridcell" data-line-type="+">    // new note</span></div>
+      </div>
+      <div data-key="code-line" role="row">
+        <div data-qa="code-line"><span role="gridcell" data-line-type="-">    // old note</span></div>
+        <div data-qa="code-line"><span role="gridcell" data-line-type="+">    var a = 1; // trailing</span></div>
+      </div>
+      <div data-key="code-line" role="row">
+        <div data-qa="code-line"><span role="gridcell" data-line-type=" ">    /// <summary>Docs.</summary></span></div>
+        <div data-qa="code-line"><span role="gridcell" data-line-type=" ">    /// <summary>Docs.</summary></span></div>
+      </div>`;
+    document.body.append(el);
+    updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: true });
+    const rows = [...el.querySelectorAll('[data-key="code-line"]')];
+    const hidden = (row) => [...row.querySelectorAll('[data-qa="code-line"]')].map((line) => line.classList.contains('bbrd-hide-line'));
+    expect(hidden(rows[0])).toEqual([false, true]);
+    expect(hidden(rows[1])).toEqual([true, false]);
+    expect(rows[1].querySelector('.bbrd-hide-comment').textContent).toBe('// trailing');
+    expect(hidden(rows[2])).toEqual([true, true]);
+    expect(rows[2].classList.contains('bbrd-hide-line')).toBe(true);
+    el.remove();
+  });
+
+  it('puts the mask back after syntax highlighting rewrites the cell', () => {
+    const el = article('src/Payment.cs', [[' ', '    // ReSharper disable once InconsistentNaming']]);
+    updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: false });
+    const cell = el.querySelector('[data-line-type]');
+    cell.innerHTML = '<span class="token comment">    // ReSharper disable once InconsistentNaming</span>';
+    updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: false });
+    expect(el.querySelector('[data-key="code-line"]').classList.contains('bbrd-hide-line')).toBe(true);
+    el.remove();
+  });
 });

@@ -6,9 +6,11 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { structuredPatch } from 'diff';
 
-const fixtures = path.resolve(import.meta.dirname, '../fixtures');
+const here = path.dirname(fileURLToPath(import.meta.url));
+const fixtures = path.resolve(here, '../fixtures');
 const read = (name) => fs.readFileSync(path.join(fixtures, name), 'utf8');
 
 export const MOCK_PR_URL = 'https://bitbucket.org/acme/payments/pull-requests/42/diff';
@@ -24,11 +26,37 @@ export const MOCK_FILES = [
   { status: 'modified', path: 'src/app.js', old: 'const a = 1;\n', new: 'const a = 2;\n' },
   { status: 'modified', path: 'src/checkout.js', old: read('checkout-old.js'), new: read('checkout-new.js') },
   { status: 'modified', path: 'src/Payment.cs', old: read('payment-old.cs'), new: read('payment-new.cs') },
+  { status: 'added', path: 'src/Payment.Tests/ChargeTests.cs', old: null, new: 'public class ChargeTests {}\n' },
+  { status: 'added', path: 'src/Payment.UnitTests/FlowTests.cs', old: null, new: 'public class FlowTests {}\n' },
   { status: 'modified', path: 'assets/logo.svg', old: '<svg></svg>\n', new: '<svg id="logo"></svg>\n' },
   { status: 'modified', path: 'config/broken.json', old: '{"a": 1}\n', new: '{"a": 1,,}\n' },
 ];
 
 const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function fileListHtml(files) {
+  const root = { dirs: new Map(), files: [] };
+  for (const file of files) {
+    const parts = file.path.split('/');
+    let node = root;
+    for (const part of parts.slice(0, -1)) {
+      if (!node.dirs.has(part)) node.dirs.set(part, { name: part, dirs: new Map(), files: [] });
+      node = node.dirs.get(part);
+    }
+    node.files.push(file);
+  }
+  const render = (node) => {
+    let html = '';
+    for (const child of node.dirs.values()) {
+      html += `<li><button type="button" aria-expanded="true"><span role="img" aria-label="Directory"></span><span class="dirname">${escape(child.name)}</span></button><ul role="list">${render(child)}</ul></li>`;
+    }
+    for (const file of node.files) {
+      html += `<li><a href="#chg-${escape(file.path)}"><span>${escape(file.path.split('/').pop())}</span></a></li>`;
+    }
+    return html;
+  };
+  return render(root);
+}
 
 function diffLine(raw) {
   const prefix = raw[0];
@@ -73,6 +101,9 @@ function pageHtml() {
     .sidebar li { list-style: none; margin: 2px 0; }
     .sidebar a { color: inherit; text-decoration: none; font-size: 13px; }
     .scroller { position: sticky; top: 0; flex: 1; height: 100%; overflow: auto; padding: 16px 24px; box-sizing: border-box; }
+    .diff-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0 0 12px; padding: 8px 0; background: #fff; }
+    .icon-btn { width: 32px; height: 32px; border: 0; border-radius: 4px; background: transparent; }
+    .vh { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
     article { border: 1px solid #dfe1e6; border-radius: 4px; margin-bottom: 16px; }
     .file-header { position: sticky; top: 0; z-index: 180; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; background: #f7f8f9; border-bottom: 1px solid #dfe1e6; cursor: pointer; }
     .file-header h2 { font-size: 14px; margin: 0; }
@@ -86,18 +117,27 @@ function pageHtml() {
     <div class="top">acme / payments — Pull request #42: Payments docs refresh</div>
     <div class="page">
       <aside class="sidebar"><div><button type="button">Filter files</button></div><ul role="list" id="file-list"></ul></aside>
-      <div class="scroller"><div id="files"></div></div>
+      <div class="scroller">
+        <div class="diff-bar"><span>0 of 11 files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button></div>
+        <div id="files"></div>
+      </div>
     </div>
     <script>
       const files = ${JSON.stringify(MOCK_FILES.map((f) => ({ path: f.path, html: articleHtml(f) })))};
       // Bitbucket renders file diffs asynchronously after the SPA boots.
       setTimeout(() => {
         document.getElementById('files').innerHTML = files.map((f) => f.html).join('');
-        document.getElementById('file-list').innerHTML = files.map((f) => '<li><a href="#chg-' + f.path + '"><span>' + f.path + '</span></a></li>').join('');
+        document.getElementById('file-list').innerHTML = ${JSON.stringify(fileListHtml(MOCK_FILES))};
         for (const header of document.querySelectorAll('.file-header')) {
           header.addEventListener('click', () => header.closest('article').classList.toggle('collapsed'));
         }
       }, 300);
+      window.__replaceDiffToolbar = () => {
+        const bar = document.querySelector('.diff-bar');
+        const clone = bar.cloneNode(true);
+        clone.querySelectorAll('.bbrd-menu-host').forEach((node) => node.remove());
+        bar.replaceWith(clone);
+      };
       window.__rerenderHeader = (index) => {
         const header = document.querySelectorAll('[data-qa="bk-file__header"]')[index];
         const clone = header.cloneNode(true);
@@ -118,7 +158,7 @@ function side(file, which) {
 
 /** @param {import('playwright-core').BrowserContext} context */
 export async function installMockBitbucket(context, { onApiRequest } = {}) {
-  const png = fs.readFileSync(path.resolve(import.meta.dirname, '../../assets/icons/icon-128.png'));
+  const png = fs.readFileSync(path.resolve(here, '../../assets/icons/icon-128.png'));
   await context.route(/^https:\/\/bitbucket\.org\/acme\/payments\/pull-requests\/42/, (route) =>
     route.fulfill({ status: 200, contentType: 'text/html', body: pageHtml() }),
   );

@@ -7,10 +7,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { installMockBitbucket, MOCK_PR_URL, NEW_COMMIT } from './mock-bitbucket.mjs';
 
-const root = path.resolve(import.meta.dirname, '../..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const dist = path.join(root, 'dist');
 const results = path.join(root, 'test-results');
 fs.mkdirSync(results, { recursive: true });
@@ -22,6 +23,15 @@ let page;
 
 const article = (filePath) => page.locator(`article[aria-label="Diff of file ${filePath}"]`);
 const shot = (name, locator = page) => locator.screenshot({ path: path.join(results, `${name}.png`) });
+
+async function openHideMenu() {
+  const panel = page.locator('.bbrd-filters');
+  if (!(await panel.isVisible())) {
+    await page.getByRole('button', { name: 'Hide files and comments' }).click();
+    await panel.waitFor();
+  }
+  return panel;
+}
 
 before(async () => {
   assert.ok(fs.existsSync(path.join(dist, 'manifest.json')), 'run `npm run build` first');
@@ -213,8 +223,14 @@ describe('mock pull request', () => {
   });
 
   it('hides markdown and chosen extensions from the file list and the diff', async () => {
-    const panel = page.locator('.bbrd-filters');
-    await panel.waitFor();
+    assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.sidebar .bbrd-filters').count(), 0);
+    const besideCog = await page.evaluate(() => {
+      const cog = [...document.querySelectorAll('button')].find((button) => (button.textContent || '').includes('Global diff settings') && !button.closest('.bbrd-menu-host'));
+      return document.querySelector('.bbrd-menu-host')?.nextElementSibling === cog;
+    });
+    assert.equal(besideCog, true);
+    const panel = await openHideMenu();
     await panel.getByLabel('Markdown files').check();
     assert.equal(await article('README.md').isVisible(), false);
     assert.equal(await article('docs/onboarding.md').isVisible(), false);
@@ -227,17 +243,57 @@ describe('mock pull request', () => {
     await extensions.blur();
     assert.equal(await article('assets/logo.svg').isVisible(), false);
     assert.equal(await page.locator('a[href="#chg-src/checkout.js"]').isVisible(), true);
-    await shot('mock-file-list-hidden', page.locator('.sidebar'));
+    await shot('mock-file-list-hidden', panel);
 
     await extensions.fill('');
     await extensions.blur();
     await panel.getByLabel('Markdown files').uncheck();
     assert.equal(await article('README.md').isVisible(), true);
     assert.equal(await article('assets/logo.svg').isVisible(), true);
+
+    await panel.getByLabel('Test projects').check();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), false);
+    assert.equal(await article('src/Payment.UnitTests/FlowTests.cs').isVisible(), false);
+    assert.equal(await page.locator('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').isVisible(), false);
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    const folderNamed = (name) => page.locator('#file-list button').filter({ has: page.locator('.dirname', { hasText: new RegExp(`^${name}$`) }) });
+    const testsFolder = folderNamed('Payment\\.Tests');
+    assert.equal(await testsFolder.locator('.bbrd-hidden-pill').textContent(), 'Hidden');
+    assert.equal(await folderNamed('Payment\\.UnitTests').locator('.bbrd-hidden-pill').count(), 1);
+    assert.equal(await folderNamed('src').locator('.bbrd-hidden-pill').count(), 0);
+    await panel.getByLabel('Test projects').uncheck();
+    assert.equal(await article('src/Payment.Tests/ChargeTests.cs').isVisible(), true);
+    assert.equal(await testsFolder.locator('.bbrd-hidden-pill').count(), 0);
+
+    const pattern = panel.locator('[data-filter="hidePattern"]');
+    await pattern.fill('\\.svg$');
+    await pattern.blur();
+    assert.equal(await article('assets/logo.svg').isVisible(), false);
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    await pattern.fill('[');
+    await pattern.blur();
+    assert.equal(await pattern.getAttribute('aria-invalid'), 'true');
+    assert.equal(await article('src/Payment.cs').isVisible(), true);
+    await pattern.fill('');
+    await pattern.blur();
+    assert.equal(await article('assets/logo.svg').isVisible(), true);
+  });
+
+  it('keeps a single hide menu when the diff toolbar is re-rendered', async () => {
+    await page.evaluate(() => window.__replaceDiffToolbar());
+    await page.evaluate(() => window.__replaceDiffToolbar());
+    await page.getByRole('button', { name: 'Hide files and comments' }).waitFor();
+    assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.bbrd-filters').count(), 1);
+    const besideCog = await page.evaluate(() => {
+      const cog = [...document.querySelectorAll('button')].find((button) => (button.textContent || '').includes('Global diff settings') && !button.closest('.bbrd-menu-host'));
+      return document.querySelector('.bbrd-menu-host')?.nextElementSibling === cog;
+    });
+    assert.equal(besideCog, true);
   });
 
   it('hides code comments and summary comments in JavaScript and C# diffs', async () => {
-    const panel = page.locator('.bbrd-filters');
+    const panel = await openHideMenu();
     const js = article('src/checkout.js');
     const cs = article('src/Payment.cs');
     const shown = (root, text) => root.locator('[data-key="code-line"]:visible', { hasText: text }).count();

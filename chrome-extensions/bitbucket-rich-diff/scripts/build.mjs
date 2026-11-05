@@ -1,8 +1,9 @@
 import * as esbuild from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(import.meta.dirname, '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outdir = path.join(root, 'dist');
 const watch = process.argv.includes('--watch');
 
@@ -44,6 +45,9 @@ const options = {
 if (watch) {
   const ctx = await esbuild.context(options);
   await ctx.watch();
+  console.log(`Watching ${outdir}`);
 } else {
   await esbuild.build(options);
+  console.log(`\nLoad this folder in chrome://extensions:\n${outdir}\n`);
+  console.log('dist is listed in .gitignore, so the editor file tree hides it. The folder is on disk at the path above.');
 }

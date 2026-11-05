@@ -55,18 +55,73 @@ article[data-bbrd-view]:not([data-bbrd-view='diff']) [data-qa='bk-file__content'
   display: none !important;
 }
 
-/* File list filters. Flat, like the rest of the sidebar: no card, Atlassian type and controls. */
+/* Hide menu, anchored beside the Files changed cog. The panel is position:fixed on the body so a re-rendered toolbar cannot clip it. */
+
+.bbrd-menu-host {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin: 0 4px 0 0;
+}
+
+button.bbrd-menu-button {
+  appearance: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ds-icon, #44546f);
+  cursor: pointer;
+  flex: none;
+  line-height: 0;
+}
+
+button.bbrd-menu-button:hover {
+  background: var(--ds-background-neutral-hovered, #091e4224);
+  color: var(--ds-icon, #44546f);
+}
+
+button.bbrd-menu-button[aria-expanded='true'] {
+  background: var(--ds-background-selected, #e9f2fe);
+  color: var(--ds-icon-selected, #1868db);
+}
+
+button.bbrd-menu-button:focus-visible {
+  outline: 2px solid var(--ds-border-focused, #388bff);
+  outline-offset: 1px;
+}
 
 .bbrd-filters {
+  position: fixed;
+  z-index: 400;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin: 2px 0 10px;
-  padding: 0;
+  width: 280px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--ds-border, #0b120e24);
+  border-radius: 8px;
+  background: var(--ds-surface-overlay, #fff);
+  box-shadow: var(--ds-shadow-overlay, 0 8px 12px #091e4226, 0 0 1px #091e424f);
   font-family: var(--ds-font-family-body, inherit);
   font-size: 14px;
   line-height: 20px;
   color: var(--ds-text, #292a2e);
+}
+
+.bbrd-filters[hidden] {
+  display: none !important;
 }
 
 .bbrd-filters-head {
@@ -173,6 +228,37 @@ article[data-bbrd-view]:not([data-bbrd-view='diff']) [data-qa='bk-file__content'
 .bbrd-ext input:focus {
   border-color: var(--ds-border-focused, #4688ec);
   outline: none;
+}
+
+.bbrd-ext input[aria-invalid='true'] {
+  border-color: var(--ds-border-danger, #e2483d);
+}
+
+.bbrd-hidden-pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  box-sizing: border-box;
+  height: 16px;
+  margin: 0 0 0 8px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--ds-background-information, #e9f2fe);
+  color: var(--ds-text-information, #1558bc);
+  font-family: var(--ds-font-family-body, inherit);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0;
+  vertical-align: middle;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+button:has(> .bbrd-hidden-pill) {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
 }
 
 .bbrd-file-hidden,

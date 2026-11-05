@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDiffRows, commentLanguage, hiddenIntervals, scanLine, initialCommentState } from '../../src/core/comments.js';
-import { isHiddenFile, parseExtensions, pathFromFileLink } from '../../src/core/file-filter.js';
+import { classifyDiffRows, classifySideBySideRows, commentLanguage, hiddenIntervals, scanLine, initialCommentState } from '../../src/core/comments.js';
+import { isHiddenFile, isHiddenFolder, parseExtensions, pathFromFileLink } from '../../src/core/file-filter.js';
 
 const both = { hideCodeComments: true, hideSummaryComments: true };
 const codeOnly = { hideCodeComments: true, hideSummaryComments: false };
@@ -63,6 +63,16 @@ describe('scanLine csharp', () => {
     const open = hidden('var s = @"first', 'cs', codeOnly);
     expect(hidden('// still the string', 'cs', codeOnly, open.state).text).toBe('');
   });
+
+  it('does not treat a quote character literal as the start of a string', () => {
+    const rows = [
+      { type: ' ', text: "var quote = '\"';" },
+      { type: ' ', text: '    /// <summary>Still a doc comment.</summary>' },
+      { type: ' ', text: '    // still a comment' },
+    ];
+    const result = classifyDiffRows(rows, 'cs', both);
+    expect(result.map((row) => row.hideLine)).toEqual([false, true, true]);
+  });
 });
 
 describe('classifyDiffRows', () => {
@@ -95,6 +105,31 @@ describe('classifyDiffRows', () => {
   });
 });
 
+describe('classifySideBySideRows', () => {
+  it('hides a C# comment added opposite a blank cell without hiding the other column', () => {
+    const rows = [
+      { cells: [{ type: ' ', text: '    var before = 1;' }, { type: ' ', text: '    var before = 1;' }] },
+      { cells: [{ type: ' ', text: '' }, { type: '+', text: '    // new note' }] },
+      { cells: [{ type: '-', text: '    // old note' }, { type: '+', text: '    var after = 2;' }] },
+      { cells: [{ type: ' ', text: '' }, { type: '+', text: '    /// <summary>Docs.</summary>' }] },
+    ];
+    const result = classifySideBySideRows(rows, 'cs', both);
+    expect(result[1].map((cell) => cell.hideLine)).toEqual([false, true]);
+    expect(result[2].map((cell) => cell.hideLine)).toEqual([true, false]);
+    expect(result[3].map((cell) => cell.hideLine)).toEqual([false, true]);
+  });
+
+  it('keeps a block comment open down the new column only', () => {
+    const rows = [
+      { cells: [{ type: ' ', text: '' }, { type: '+', text: '    /* open' }] },
+      { cells: [{ type: ' ', text: '    code();' }, { type: '+', text: '    still hidden' }] },
+    ];
+    const result = classifySideBySideRows(rows, 'cs', codeOnly);
+    expect(result[1][0].hideLine).toBe(false);
+    expect(result[1][1].hideLine).toBe(true);
+  });
+});
+
 describe('commentLanguage', () => {
   it('recognises javascript, typescript and csharp paths', () => {
     expect(commentLanguage('src/app.js')).toBe('js');
@@ -119,6 +154,36 @@ describe('file filter', () => {
     expect(isHiddenFile('vendor/lib.min.js', settings)).toBe(true);
     expect(isHiddenFile('src/app.js', settings)).toBe(false);
     expect(isHiddenFile('README.md', { hideMarkdown: false, hiddenExtensions: [] })).toBe(false);
+  });
+
+  it('hides every file inside a folder whose name ends in Tests', () => {
+    const tests = { hideTestFolders: true };
+    expect(isHiddenFile('src/Payment.Tests/ChargeTests.cs', tests)).toBe(true);
+    expect(isHiddenFile('src/Payment.UnitTests/ChargeTests.cs', tests)).toBe(true);
+    expect(isHiddenFile('src/Payment.IntegrationTests/Flow.cs', tests)).toBe(true);
+    expect(isHiddenFile('tests/Payment.Tests/ChargeTests.cs', tests)).toBe(true);
+    expect(isHiddenFile('src/Payment.cs', tests)).toBe(false);
+    expect(isHiddenFile('src/Payment.Tests.Extra/ChargeTests.cs', tests)).toBe(false);
+    expect(isHiddenFile('src/Payment.Tests/ChargeTests.cs', { hideTestFolders: false })).toBe(false);
+  });
+
+  it('hides paths, folders and file names that match a regular expression', () => {
+    expect(isHiddenFile('assets/logo.svg', { hidePattern: '\\.svg$' })).toBe(true);
+    expect(isHiddenFile('src/Payment.cs', { hidePattern: '\\.svg$' })).toBe(false);
+    expect(isHiddenFile('tmp/cache/notes.txt', { hidePattern: '(^|/)tmp(/|$)' })).toBe(true);
+    expect(isHiddenFile('src/Payment.cs', { hidePattern: '[' })).toBe(false);
+    expect(isHiddenFile('src/Payment.cs', { hidePattern: '' })).toBe(false);
+  });
+
+  it('marks a folder the test-project or pattern rule hides, and leaves its parents alone', () => {
+    expect(isHiddenFolder('src/Payment.Tests', { hideTestFolders: true })).toBe(true);
+    expect(isHiddenFolder('Payment.UnitTests', { hideTestFolders: true })).toBe(true);
+    expect(isHiddenFolder('src', { hideTestFolders: true })).toBe(false);
+    expect(isHiddenFolder('src/Payment.Tests.Extra', { hideTestFolders: true })).toBe(false);
+    expect(isHiddenFolder('src/Payment.Tests', { hideTestFolders: false })).toBe(false);
+    expect(isHiddenFolder('assets', { hidePattern: '\\.svg$' })).toBe(false);
+    expect(isHiddenFolder('src/tmp/cache', { hidePattern: '(^|/)tmp(/|$)' })).toBe(true);
+    expect(isHiddenFolder('src/Payment.cs', { hidePattern: '[' })).toBe(false);
   });
 
   it('reads the file path out of a list link', () => {
