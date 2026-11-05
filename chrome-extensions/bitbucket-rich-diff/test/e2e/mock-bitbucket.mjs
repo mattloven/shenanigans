@@ -136,27 +136,48 @@ function pageHtml() {
   </style></head><body>
     <div class="top">acme / payments — Pull request #42: Payments docs refresh</div>
     <div class="page">
-      <aside class="sidebar"><div><button type="button">Filter files</button></div><ul role="list" id="file-list"></ul></aside>
+      <aside class="sidebar"><div class="sidebar-head"><span data-qa="files-changed-count">${MOCK_FILES.length} files changed</span><button type="button">Filter files</button></div><ul role="list" id="file-list"></ul></aside>
       <div class="scroller">
-        <div class="diff-bar"><span>0 of 11 files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button></div>
+        <div class="diff-bar"><span data-qa="files-viewed-count">0 of ${MOCK_FILES.length} files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button></div>
         <div id="files"></div>
       </div>
     </div>
     <script>
       const files = ${JSON.stringify(MOCK_FILES.map((f) => ({ path: f.path, html: articleHtml(f) })))};
+      const fileListMarkup = ${JSON.stringify(fileListHtml(MOCK_FILES))};
+      const fileCount = ${MOCK_FILES.length};
       // Bitbucket renders file diffs asynchronously after the SPA boots.
       setTimeout(() => {
         document.getElementById('files').innerHTML = files.map((f) => f.html).join('');
-        document.getElementById('file-list').innerHTML = ${JSON.stringify(fileListHtml(MOCK_FILES))};
+        document.getElementById('file-list').innerHTML = fileListMarkup;
         for (const header of document.querySelectorAll('.file-header')) {
           header.addEventListener('click', () => header.closest('article').classList.toggle('collapsed'));
         }
       }, 300);
       window.__replaceDiffToolbar = () => {
         const bar = document.querySelector('.diff-bar');
-        const clone = bar.cloneNode(true);
-        clone.querySelectorAll('.bbrd-menu-host').forEach((node) => node.remove());
-        bar.replaceWith(clone);
+        const next = document.createElement('div');
+        next.className = 'diff-bar';
+        next.innerHTML = '<span data-qa="files-viewed-count">0 of ' + fileCount + ' files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button>';
+        bar.replaceWith(next);
+      };
+      window.__replaceFileTree = () => {
+        const list = document.getElementById('file-list');
+        const next = document.createElement('ul');
+        next.id = 'file-list';
+        next.setAttribute('role', 'list');
+        next.innerHTML = fileListMarkup;
+        list.replaceWith(next);
+        const changed = document.querySelector('[data-qa="files-changed-count"]');
+        if (changed) {
+          changed.textContent = fileCount + ' files changed';
+          delete changed.dataset.bbrdChangedOriginal;
+        }
+        const viewed = document.querySelector('[data-qa="files-viewed-count"]');
+        if (viewed) {
+          viewed.textContent = '0 of ' + fileCount + ' files viewed';
+          delete viewed.dataset.bbrdViewedOriginal;
+        }
       };
       window.__rerenderHeader = (index) => {
         const header = document.querySelectorAll('[data-qa="bk-file__header"]')[index];
