@@ -404,4 +404,98 @@ function applyHidden(root, settings, commentOnly) {
       lines.removed += stat.removed;
     }
     setHidden(item, Boolean(category) && !revealed && !lens);
-    syncChip(item, revealed &&
+    syncChip(item, revealed && category && !lens ? category : null);
+  }
+  for (const article of findFileDiffs(root)) {
+    const path = getFilePath(article);
+    const category = fileCategory(path, settings, commentOnly);
+    setHidden(article, Boolean(category) && !revealed && !lens);
+  }
+  markHiddenFolders(root, settings, lens);
+  const hiddenCount = CATEGORY_ORDER.reduce((sum, key) => sum + (counts[key] || 0), 0);
+  const summary = formatHideSummary(counts, lines);
+  syncFlyoutSummary(root, summary);
+  // Drop any leftover Show bars from older builds; Bitbucket re-renders the file tree and would duplicate them.
+  for (const bar of documentOf(root).querySelectorAll('.bbrd-hidden-bar')) bar.remove();
+  syncFileCounters(root, hiddenCount);
+  return hiddenCount;
+}
+
+function syncFlyoutSummary(root, summary) {
+  const panel = documentOf(root).querySelector('.bbrd-filters') ?? document.querySelector('.bbrd-filters');
+  if (!panel) return;
+  const count = panel.querySelector('.bbrd-hidden-count');
+  if (count && count.textContent !== summary) count.textContent = summary;
+  const foot = panel.querySelector('.bbrd-filters-foot');
+  if (foot) foot.hidden = !summary;
+  const toggle = panel.querySelector('.bbrd-hidden-toggle');
+  if (!toggle) return;
+  if (!summary) {
+    toggle.hidden = true;
+    return;
+  }
+  toggle.hidden = false;
+  const text = revealed ? 'Hide' : 'Show';
+  const name = revealed ? 'Hide hidden files' : 'Show hidden files';
+  if (toggle.textContent !== text) toggle.textContent = text;
+  toggle.setAttribute('aria-label', name);
+}
+
+function readStat(element) {
+  const text = element?.textContent ?? '';
+  return { added: sumPhrase(text, /([\d,]+)\s+lines?\s+added/gi), removed: sumPhrase(text, /([\d,]+)\s+lines?\s+removed/gi) };
+}
+
+function sumPhrase(text, pattern) {
+  let total = 0;
+  for (const match of text.matchAll(pattern)) total += Number(match[1].replaceAll(',', ''));
+  return total;
+}
+
+function syncChip(item, category) {
+  const host = item.querySelector(':scope > a[href*="#chg-"]') ?? item;
+  let chip = host.querySelector(':scope > .bbrd-cat');
+  if (!category) {
+    chip?.remove();
+    return;
+  }
+  const label = CATEGORY_LABEL[category];
+  if (!chip) {
+    chip = host.ownerDocument.createElement('span');
+    chip.className = 'bbrd-cat bbrd-pill';
+    chip.title = 'Hidden by Bitbucket Rich Diff';
+  }
+  chip.dataset.kind = category;
+  if (chip.textContent !== label) chip.textContent = label;
+  placeLeading(host, chip);
+}
+
+/**
+ * While files are hidden, show actual (real minus hidden) beside the original Bitbucket total.
+ * "0 of 14 files viewed" becomes "0 of 12 viewed · 14 files". "14 files changed" becomes
+ * "12 of 14 files changed". The original string is stored the first time we see the node and
+ * restored exactly when nothing is hidden. A later scan never treats rewritten text as the source.
+ * @param {ParentNode} root
+ * @param {number} hiddenCount
+ */
+function syncFileCounters(root, hiddenCount) {
+  const doc = documentOf(root);
+  const exclude = Boolean(hiddenCount) && !revealed;
+  const viewedVisible = exclude ? countViewedVisible(root) : null;
+  for (const node of counterLeaves(doc)) {
+    rewriteCounter(node, VIEWED_COUNTER, ORIGINAL_VIEWED, exclude, hiddenCount, (viewed, total) => {
+      const actual = Math.max(0, total - hiddenCount);
+      const nextViewed = viewedVisible == null ? Math.min(viewed, actual) : Math.min(viewedVisible, actual);
+      const word = total === 1 ? 'file' : 'files';
+      return `${formatCount(nextViewed)} of ${formatCount(actual)} viewed · ${formatCount(total)} ${word}`;
+    });
+    rewriteCounter(node, CHANGED_COUNTER, ORIGINAL_CHANGED, exclude, hiddenCount, (_count, total, source) => {
+      const actual = Math.max(0, total - hiddenCount);
+      const word = /\bfile\b/i.test(source) && !/\bfiles\b/i.test(source) ? 'file' : 'files';
+      return `${formatCount(actual)} of ${formatCount(total)} ${word} changed`;
+    });
+  }
+}
+
+function counterLeaves(doc) {
+  if (!doc.body?.querySelectorAll) return
