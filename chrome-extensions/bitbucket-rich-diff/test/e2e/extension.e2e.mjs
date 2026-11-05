@@ -1,2 +1,1 @@
-// placeholder - will be replaced with full e2e
-export {};
+@/tmp/bbrd-mcp/e2e-ready.mjs
