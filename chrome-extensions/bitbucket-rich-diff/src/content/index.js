@@ -1,5 +1,5 @@
 import { detectFileType } from '../core/file-types.js';
-import { loadSettings, onSettingsChanged, saveSettings } from '../core/settings.js';
+import { loadSettings, normalizeSettings, onSettingsChanged, saveSettings } from '../core/settings.js';
 import { createCloudClient, findFileDiffs, getFilePath, parsePrUrl, prKey } from '../platform/bitbucket-cloud.js';
 import { commentOnlyPaths, updateCommentMasks } from './comment-mask.js';
 import { installDiffWheel } from './diff-scroll.js';
@@ -118,15 +118,18 @@ export class RichDiffApp {
     updateCommentMasks(this.root, this.settings);
     mountStatsTab(this.root);
     mountFileFilters(this.root, this.settings, (key, value) => this.persistSetting(key, value), commentOnlyPaths(this.root));
-    mountReviewGroups(this.root, parsePrUrl(this.location.href), null, this.settings);
+    mountReviewGroups(this.root, parsePrUrl(this.location.href), null, this.settings, (patch) => this.persistPatch(patch));
     mountTestOutlines(this.root);
     groupCounts(this.root);
   }
 
   persistSetting(key, value) {
-    const next = { ...this.settings, [key]: value };
-    if (next.hideSummaryComments) next.collapseSummaryComments = false;
-    this.settings = next;
+    this.persistPatch({ [key]: value });
+  }
+
+  /** @param {Partial<import('../core/settings.js').Settings>} patch */
+  persistPatch(patch) {
+    this.settings = normalizeSettings({ ...this.settings, ...patch });
     for (const view of this.views.values()) view.applySettings(this.settings);
     this.applyPageFilters();
     saveSettings(this.settings);

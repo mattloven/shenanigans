@@ -1,4 +1,5 @@
 import { parseExtensions } from './file-filter.js';
+import { dotnetWorkflow, normalizeWorkflowState, sampleFilters } from './review-workflows.js';
 
 /**
  * @typedef {object} Settings
@@ -18,6 +19,9 @@ import { parseExtensions } from './file-filter.js';
  * @property {boolean} hideCommentFiles     hide files whose entire diff is comments
  * @property {string} hidePattern           regular expression matched against the path, each folder, and the file name
  * @property {boolean} hideReviewGroups    hide the Review path section under the summary
+ * @property {import('./review-workflows.js').ReviewFilter[]} reviewFilters  named path patterns groups can reuse
+ * @property {import('./review-workflows.js').ReviewWorkflow[]} reviewWorkflows  saved review paths, remembered for every pull request
+ * @property {string} activeReviewWorkflow  which saved review path is shown
  */
 
 /** @typedef {'old' | 'new' | 'split'} PreviewLayout */
@@ -40,6 +44,9 @@ export const DEFAULT_SETTINGS = {
   hideCommentFiles: false,
   hidePattern: '',
   hideReviewGroups: false,
+  reviewFilters: sampleFilters(),
+  reviewWorkflows: [dotnetWorkflow()],
+  activeReviewWorkflow: 'dotnet',
 };
 
 export const PREVIEW_LAYOUTS = ['old', 'new', 'split'];
@@ -50,6 +57,7 @@ const VALID_VIEWS = new Set(['diff', 'changes', 'preview']);
 export function normalizeSettings(stored) {
   const s = stored && typeof stored === 'object' ? stored : {};
   const hideSummaryComments = typeof s.hideSummaryComments === 'boolean' ? s.hideSummaryComments : DEFAULT_SETTINGS.hideSummaryComments;
+  const workflows = normalizeWorkflowState(s.reviewWorkflows, s.activeReviewWorkflow, s.reviewFilters);
   const type = (key) => ({
     enabled: typeof s[key]?.enabled === 'boolean' ? s[key].enabled : DEFAULT_SETTINGS[key].enabled,
     defaultView: VALID_VIEWS.has(s[key]?.defaultView) ? s[key].defaultView : DEFAULT_SETTINGS[key].defaultView,
@@ -71,6 +79,9 @@ export function normalizeSettings(stored) {
     hideCommentFiles: typeof s.hideCommentFiles === 'boolean' ? s.hideCommentFiles : DEFAULT_SETTINGS.hideCommentFiles,
     hidePattern: typeof s.hidePattern === 'string' ? s.hidePattern.slice(0, 200) : DEFAULT_SETTINGS.hidePattern,
     hideReviewGroups: typeof s.hideReviewGroups === 'boolean' ? s.hideReviewGroups : DEFAULT_SETTINGS.hideReviewGroups,
+    reviewFilters: workflows.reviewFilters,
+    reviewWorkflows: workflows.reviewWorkflows,
+    activeReviewWorkflow: workflows.activeReviewWorkflow,
   };
 }
 

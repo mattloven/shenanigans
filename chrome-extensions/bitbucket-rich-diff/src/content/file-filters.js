@@ -82,6 +82,7 @@ function ensurePanel(doc, onChange) {
   }
   shapeCommentOptions(panel);
   shapeReviewOption(panel);
+  shapeWorkflowSlot(panel);
   changeHandlers.set(panel, onChange);
   return panel;
 }
@@ -155,6 +156,12 @@ function buildPanel() {
   panel.hidden = true;
   panel.innerHTML = `
     <div class="bbrd-filters-head">Hide</div>
+    <div class="bbrd-workflow-slot">
+      <div class="bbrd-filters-section">Workflow</div>
+      <label class="bbrd-ext">Show <select data-workflow aria-label="Review workflow"></select></label>
+      <button type="button" class="bbrd-workflow-open">Edit groups</button>
+      <p class="bbrd-hint">Name, colour, filter, and order. Saved for every pull request. .NET Workflow is the sample.</p>
+    </div>
     <label class="bbrd-check" title="Hides the Review path section under the summary."><input type="checkbox" data-filter="hideReviewGroups" /> Review path</label>
     <label class="bbrd-check" title="Also hides .markdown and the other markdown extensions"><input type="checkbox" data-filter="hideMarkdown" /> Markdown files</label>
     <label class="bbrd-check" title="Line comments and block comments"><input type="checkbox" data-filter="hideCodeComments" /> Code comments</label>
@@ -173,6 +180,13 @@ function buildPanel() {
     </div>`;
   panel.addEventListener('click', (event) => {
     event.stopPropagation();
+    const opener = event.target.closest('.bbrd-workflow-open');
+    if (opener && panel.contains(opener)) {
+      event.preventDefault();
+      closeMenu(panel.ownerDocument);
+      panel.ownerDocument.dispatchEvent(new CustomEvent('bbrd-edit-workflow'));
+      return;
+    }
     const toggle = event.target.closest('.bbrd-hidden-toggle');
     if (!toggle || !panel.contains(toggle)) return;
     event.preventDefault();
@@ -182,6 +196,11 @@ function buildPanel() {
   });
   panel.addEventListener('keydown', (event) => event.stopPropagation());
   panel.addEventListener('change', (event) => {
+    const workflow = event.target.closest('[data-workflow]');
+    if (workflow instanceof HTMLSelectElement && panel.contains(workflow)) {
+      changeHandlers.get(panel)?.('activeReviewWorkflow', workflow.value);
+      return;
+    }
     const input = event.target.closest('[data-filter]');
     if (!input) return;
     const key = input.dataset.filter;
@@ -262,6 +281,21 @@ function placeMenu(host, panel) {
   panel.style.top = `${Math.round(top)}px`;
 }
 
+/** Adds the workflow picker on a menu built before it existed. */
+function shapeWorkflowSlot(panel) {
+  if (panel.querySelector('[data-workflow]')) return;
+  const head = panel.querySelector('.bbrd-filters-head');
+  if (!head) return;
+  const slot = panel.ownerDocument.createElement('div');
+  slot.className = 'bbrd-workflow-slot';
+  slot.innerHTML = `
+    <div class="bbrd-filters-section">Workflow</div>
+    <label class="bbrd-ext">Show <select data-workflow aria-label="Review workflow"></select></label>
+    <button type="button" class="bbrd-workflow-open">Edit groups</button>
+    <p class="bbrd-hint">Name, colour, filter, and order. Saved for every pull request. .NET Workflow is the sample.</p>`;
+  head.insertAdjacentElement('afterend', slot);
+}
+
 /** Adds the Review path checkbox on a menu built before it existed. */
 function shapeReviewOption(panel) {
   if (panel.querySelector('[data-filter="hideReviewGroups"]')) return;
@@ -301,10 +335,34 @@ function syncPanel(panel, settings) {
   const text = settings.hiddenExtensions.join(', ');
   if (document.activeElement !== extensions && extensions.value !== text) extensions.value = text;
   const pattern = panel.querySelector('[data-filter="hidePattern"]');
+  const workflow = panel.querySelector('[data-workflow]');
+  if (workflow instanceof HTMLSelectElement) paintWorkflowSelect(workflow, settings);
   if (document.activeElement !== pattern && pattern.value !== settings.hidePattern) pattern.value = settings.hidePattern;
   const invalid = settings.hidePattern.trim() !== '' && !compileHidePattern(settings.hidePattern);
   pattern.setAttribute('aria-invalid', invalid ? 'true' : 'false');
   pauseFileFilters(panel, Boolean(activeReviewGroup()));
+}
+
+/**
+ * @param {HTMLSelectElement} select
+ * @param {{ reviewWorkflows?: { id: string, name: string }[], activeReviewWorkflow?: string }} settings
+ */
+function paintWorkflowSelect(select, settings) {
+  const workflows = Array.isArray(settings.reviewWorkflows) && settings.reviewWorkflows.length
+    ? settings.reviewWorkflows
+    : [{ id: 'dotnet', name: '.NET Workflow' }];
+  const active = workflows.some((item) => item.id === settings.activeReviewWorkflow) ? settings.activeReviewWorkflow : workflows[0].id;
+  const signature = `${workflows.map((item) => `${item.id}\t${item.name}`).join('\n')}\n${active}`;
+  if (select.dataset.signature === signature) return;
+  select.dataset.signature = signature;
+  select.replaceChildren();
+  for (const workflow of workflows) {
+    const option = select.ownerDocument.createElement('option');
+    option.value = workflow.id;
+    option.textContent = workflow.name;
+    select.append(option);
+  }
+  select.value = active ?? workflows[0].id;
 }
 
 /** A selected review group is the only file filter. The checkboxes stay put and come back when the group is cleared. */

@@ -1,31 +1,42 @@
 import { formatCount, pathFromFileLink } from '../core/file-filter.js';
-import { firstUnfinishedGroup, nextUnviewed, normalizePath, parseReviewedState, REVIEW_GROUPS, reviewGroup, reviewedStorageKey } from '../core/review-groups.js';
+import { firstUnfinishedGroup, nextUnviewed, normalizePath, parseReviewedState, reviewedStorageKey } from '../core/review-groups.js';
+import { activeWorkflow, assignGroup, normalizeWorkflowState, workflowState } from '../core/review-workflows.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
+import { mountWorkflowEditor } from './workflow-editor.js';
 
 const REVIEW_TITLE = 'Review path';
-const REVIEW_HELP = 'Splits this pull request into infrastructure, business, tests, and documentation. Click a group to show only those files. The chosen card fills in and reads Showing. Continue opens the first group that is not finished. Next unviewed is a switch: while it is on, viewed files are hidden and the next one opens. A group turns green when every file in it is viewed. File hide rules pause while a group is selected. Comment settings still apply.';
+const REVIEW_HELP = 'Shows the selected workflow. Edit opens a dialog for the name, colour, order, and saved pattern of each group. Patterns can be reused and are remembered for every pull request. The .NET Workflow is the sample. Click a group to show only those files. The chosen card fills in and reads Showing. Continue to a group opens the first group that still has files to view. Next unviewed is a switch: while it is on, viewed files are hidden and the next one opens. A group turns green when every file in it is viewed. File hide rules pause while a group is selected. Comment settings still apply.';
 
-/** @type {import('../core/review-groups.js').ReviewGroup | null} */
+/** @type {string | null} */
 let activeGroup = null;
 /** While on, files already marked viewed stay out of the list and the diff. */
 let unviewedOnly = false;
+/** @type {string | null} */
+let shownWorkflow = null;
+let editorOpen = false;
+/** @type {WeakSet<Document>} */
+const wiredDocs = new WeakSet();
 
 /**
  * @typedef {object} ReviewFile
  * @property {string} path
- * @property {import('../core/review-groups.js').ReviewGroup} group
+ * @property {string} group
  * @property {Element} item
  * @property {number} added
  * @property {number} removed
  */
 
-/** @type {{ root: ParentNode, pr: { workspace: string, repo: string, prId: number } | null, storage: Storage | null, settings: { hideReviewGroups?: boolean }, files: ReviewFile[], reviewed: Set<string> } | null} */
+/** @typedef {(patch: { reviewWorkflows: import('../core/review-workflows.js').ReviewWorkflow[], reviewFilters: import('../core/review-workflows.js').ReviewFilter[], activeReviewWorkflow: string }) => void} WorkflowChange */
+
+/** @type {{ root: ParentNode, pr: { workspace: string, repo: string, prId: number } | null, storage: Storage | null, settings: { hideReviewGroups?: boolean, reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], activeReviewWorkflow?: string }, files: ReviewFile[], reviewed: Set<string>, onChange: WorkflowChange | null } | null} */
 let lastMount = null;
 
 /** The next pull request starts with every file showing. */
 export function resetReviewGroup() {
   activeGroup = null;
   unviewedOnly = false;
+  editorOpen = false;
+  shownWorkflow = null;
 }
 
 /** The group currently filtering the file list, if one is selected. */
@@ -39,50 +50,66 @@ export function activeReviewGroup() {
  * @param {ParentNode} root
  * @param {{ workspace: string, repo: string, prId: number } | null} [pr]
  * @param {Storage | null} [storage]
- * @param {{ hideReviewGroups?: boolean }} [settings]
+ * @param {{ hideReviewGroups?: boolean, reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], activeReviewWorkflow?: string }} [settings]
+ * @param {WorkflowChange | null} [onChange]
  */
-export function mountReviewGroups(root, pr = null, storage = null, settings = {}) {
+export function mountReviewGroups(root, pr = null, storage = null, settings = {}, onChange = null) {
   const doc = root.nodeType === 9 ? root : root.ownerDocument ?? document;
   const store = storage ?? doc.defaultView?.localStorage ?? null;
   const panel = doc.querySelector('.bbrd-stats');
   if (!panel) return;
-  const files = filesIn(root);
+  ensureWorkflowOpen(doc);
+  const state = workflowState(settings);
+  const workflow = state.reviewWorkflows.find((item) => item.id === state.activeReviewWorkflow) ?? state.reviewWorkflows[0];
+  const filters = state.reviewFilters;
+  if (shownWorkflow && shownWorkflow !== workflow.id) activeGroup = null;
+  shownWorkflow = workflow.id;
+  const files = filesIn(root, workflow.groups, filters);
   const reviewed = reviewedPaths(root, pr, store);
-  lastMount = { root, pr, storage: store, settings, files, reviewed };
+  lastMount = { root, pr, storage: store, settings, files, reviewed, onChange };
   if (settings.hideReviewGroups) {
     activeGroup = null;
     unviewedOnly = false;
+    editorOpen = false;
     panel.querySelector('.bbrd-review')?.remove();
     panel.querySelector(':scope > .bbrd-groups')?.remove();
-    applyGroupFilter(root, files, reviewed);
+    applyGroupFilter(root, files, workflow.groups, reviewed, filters);
+    closeWorkflowDialog(doc);
     return;
   }
-  const section = ensureSection(panel);
+  const section = ensureSection(panel, settings, onChange);
   const bar = section.querySelector('.bbrd-groups');
-  /** @type {{ group: import('../core/review-groups.js').ReviewGroup, count: number, viewed: number }[]} */
+  const ids = new Set(workflow.groups.map((group) => group.id));
+  for (const button of bar ? [...bar.querySelectorAll('.bbrd-group')] : []) {
+    if (!ids.has(button.dataset.group ?? '')) button.remove();
+  }
+  /** @type {{ group: string, count: number, viewed: number }[]} */
   const summaries = [];
-  for (const group of REVIEW_GROUPS) {
+  for (const group of workflow.groups) {
     const rows = files.filter((file) => file.group === group.id);
     const viewed = rows.filter((file) => reviewed.has(file.path)).length;
     const added = rows.reduce((sum, file) => sum + file.added, 0);
     const removed = rows.reduce((sum, file) => sum + file.removed, 0);
     summaries.push({ group: group.id, count: rows.length, viewed });
-    paintGroup(bar, group, rows.length, viewed, added, removed);
+    paintGroup(bar, group, filters, rows.length, viewed, added, removed);
+    const painted = bar?.querySelector(`[data-group="${group.id}"]`);
+    if (painted) bar?.append(painted);
   }
-  paintActions(section, summaries, files, reviewed);
+  paintActions(section, summaries, files, reviewed, workflow.groups.map((group) => group.id));
   if (activeGroup && !files.some((file) => file.group === activeGroup)) activeGroup = null;
-  applyGroupFilter(root, files, reviewed);
+  applyGroupFilter(root, files, workflow.groups, reviewed, filters);
 }
 
 /**
  * @param {HTMLElement | null} bar
- * @param {{ id: import('../core/review-groups.js').ReviewGroup, label: string, hint: string }} group
+ * @param {import('../core/review-workflows.js').WorkflowGroup} group
+ * @param {import('../core/review-workflows.js').ReviewFilter[]} filters
  * @param {number} count
  * @param {number} viewed
  * @param {number} added
  * @param {number} removed
  */
-function paintGroup(bar, group, count, viewed, added, removed) {
+function paintGroup(bar, group, filters, count, viewed, added, removed) {
   if (!bar) return;
   let button = bar.querySelector(`[data-group="${group.id}"]`);
   if (!(button instanceof HTMLButtonElement)) {
@@ -94,16 +121,19 @@ function paintGroup(bar, group, count, viewed, added, removed) {
     button.addEventListener('click', () => {
       if (button.disabled || !lastMount) return;
       activeGroup = activeGroup === group.id ? null : group.id;
-      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings);
+      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
       button.ownerDocument.dispatchEvent(new CustomEvent('bbrd-review-group'));
     });
     bar.append(button);
   }
   const done = count > 0 && viewed === count;
   button.disabled = count === 0;
-  button.title = group.hint;
+  const saved = filters.find((filter) => filter.id === group.filterId);
+  button.title = saved ? `${saved.name}: ${saved.pattern}` : 'Remaining files';
   button.setAttribute('aria-pressed', activeGroup === group.id ? 'true' : 'false');
   button.dataset.done = done ? 'true' : 'false';
+  button.style.setProperty('--bbrd-group-ink', done ? '#216e4e' : group.color);
+  button.style.setProperty('--bbrd-group', done ? '#dcfff1' : `color-mix(in srgb, ${group.color} 16%, #fff)`);
   const name = button.querySelector('.bbrd-group-name');
   const tally = button.querySelector('.bbrd-group-count');
   const progress = button.querySelector('.bbrd-group-viewed');
@@ -114,7 +144,7 @@ function paintGroup(bar, group, count, viewed, added, removed) {
   const viewedText = done ? 'Done' : `${formatCount(viewed)} viewed`;
   const addedText = `+${formatCount(added)}`;
   const removedText = `−${formatCount(removed)}`;
-  if (name && name.textContent !== group.label) name.textContent = group.label;
+  if (name && name.textContent !== group.name) name.textContent = group.name;
   if (tally && tally.textContent !== countText) tally.textContent = countText;
   if (progress && progress.textContent !== viewedText) progress.textContent = viewedText;
   if (addedNode && addedNode.textContent !== addedText) addedNode.textContent = addedText;
@@ -122,16 +152,17 @@ function paintGroup(bar, group, count, viewed, added, removed) {
   const width = count === 0 ? '0%' : `${Math.round((viewed / count) * 100)}%`;
   if (fill instanceof HTMLElement && fill.style.width !== width) fill.style.width = width;
   const showing = activeGroup === group.id ? 'Showing. ' : '';
-  button.setAttribute('aria-label', `${showing}${group.label}, ${countText}, ${addedText} ${removedText}, ${viewedText}`);
+  button.setAttribute('aria-label', `${showing}${group.name}, ${countText}, ${addedText} ${removedText}, ${viewedText}`);
 }
 
 /**
  * @param {HTMLElement} section
- * @param {{ group: import('../core/review-groups.js').ReviewGroup, count: number, viewed: number }[]} summaries
+ * @param {{ group: string, count: number, viewed: number }[]} summaries
  * @param {ReviewFile[]} files
  * @param {Set<string>} reviewed
+ * @param {string[]} order
  */
-function paintActions(section, summaries, files, reviewed) {
+function paintActions(section, summaries, files, reviewed, order) {
   const head = section.querySelector('.bbrd-review-head');
   if (!head) return;
   let actions = head.querySelector('.bbrd-review-actions');
@@ -141,20 +172,23 @@ function paintActions(section, summaries, files, reviewed) {
     actions.innerHTML = '<button type="button" class="bbrd-review-continue">Continue</button><label class="bbrd-switch"><input type="checkbox" class="bbrd-review-next" /><span>Next unviewed</span></label>';
     actions.querySelector('.bbrd-review-continue')?.addEventListener('click', () => {
       if (!lastMount) return;
-      const next = firstUnfinishedGroup(summariesFor(lastMount.files, lastMount.reviewed));
+      const groups = activeWorkflow(lastMount.settings).groups;
+      const next = firstUnfinishedGroup(summariesFor(lastMount.files, lastMount.reviewed, groups), groups.map((group) => group.id));
       if (!next) return;
       activeGroup = next;
-      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings);
+      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
       actions.ownerDocument.dispatchEvent(new CustomEvent('bbrd-review-group'));
     });
     actions.querySelector('.bbrd-review-next')?.addEventListener('change', () => {
       if (!lastMount) return;
       const box = actions.querySelector('.bbrd-review-next');
       unviewedOnly = box instanceof HTMLInputElement && box.checked;
-      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings);
+      const groups = activeWorkflow(lastMount.settings).groups;
+      const orderIds = groups.map((group) => group.id);
+      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
       actions.ownerDocument.dispatchEvent(new CustomEvent('bbrd-review-group'));
       if (!unviewedOnly) return;
-      const file = nextUnviewed(lastMount.files, lastMount.reviewed, activeGroup, currentPath(lastMount.root));
+      const file = nextUnviewed(lastMount.files, lastMount.reviewed, activeGroup, currentPath(lastMount.root), orderIds);
       const link = file?.item.querySelector('a[href*="#chg-"]');
       if (!(link instanceof HTMLElement)) return;
       link.scrollIntoView?.({ block: 'nearest' });
@@ -162,15 +196,16 @@ function paintActions(section, summaries, files, reviewed) {
     });
     head.append(actions);
   }
-  const unfinished = firstUnfinishedGroup(summaries);
+  const unfinished = firstUnfinishedGroup(summaries, order);
   const continueButton = actions.querySelector('.bbrd-review-continue');
   if (continueButton instanceof HTMLButtonElement) {
     continueButton.disabled = !unfinished;
-    const continueText = unfinished ? 'Continue' : 'Done';
+    const nextName = unfinished ? activeWorkflow(lastMount?.settings).groups.find((group) => group.id === unfinished)?.name ?? unfinished : '';
+    const continueText = unfinished ? `Continue to ${nextName}` : 'Done';
     if (continueButton.textContent !== continueText) continueButton.textContent = continueText;
-    continueButton.title = unfinished ? 'Show the first group that still has files to view' : 'Every file is marked viewed';
+    continueButton.title = unfinished ? `Show ${nextName}` : 'Every file is marked viewed';
   }
-  const upcoming = nextUnviewed(files, reviewed, activeGroup, currentPath(section.ownerDocument));
+  const upcoming = nextUnviewed(files, reviewed, activeGroup, currentPath(section.ownerDocument), order);
   if (!upcoming) unviewedOnly = false;
   const nextSwitch = actions.querySelector('.bbrd-review-next');
   if (nextSwitch instanceof HTMLInputElement) {
@@ -186,8 +221,13 @@ function paintActions(section, summaries, files, reviewed) {
  * @param {ReviewFile[]} files
  * @param {Set<string>} reviewed
  */
-function summariesFor(files, reviewed) {
-  return REVIEW_GROUPS.map((group) => {
+/**
+ * @param {ReviewFile[]} files
+ * @param {Set<string>} reviewed
+ * @param {import('../core/review-workflows.js').WorkflowGroup[]} groups
+ */
+function summariesFor(files, reviewed, groups) {
+  return groups.map((group) => {
     const rows = files.filter((file) => file.group === group.id);
     return { group: group.id, count: rows.length, viewed: rows.filter((file) => reviewed.has(file.path)).length };
   });
@@ -207,8 +247,12 @@ function currentPath(root) {
   return null;
 }
 
-/** @param {HTMLElement} panel */
-function ensureSection(panel) {
+/**
+ * @param {HTMLElement} panel
+ * @param {{ reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], activeReviewWorkflow?: string }} settings
+ * @param {WorkflowChange | null} onChange
+ */
+function ensureSection(panel, settings, onChange) {
   panel.querySelector(':scope > .bbrd-groups')?.remove();
   let section = panel.querySelector('.bbrd-review');
   if (!section) {
@@ -217,13 +261,130 @@ function ensureSection(panel) {
     section.innerHTML = `<div class="bbrd-review-head"><h3></h3><button type="button" class="bbrd-info" aria-label="About ${REVIEW_TITLE}">i</button></div><div class="bbrd-groups" role="group" aria-label="${REVIEW_TITLE}"></div>`;
     const info = section.querySelector('.bbrd-info');
     info?.addEventListener('click', (event) => event.preventDefault());
+    const head = section.querySelector('.bbrd-review-head');
+    const pick = panel.ownerDocument.createElement('label');
+    pick.className = 'bbrd-workflow-pick';
+    pick.append('Workflow');
+    const select = panel.ownerDocument.createElement('select');
+    select.className = 'bbrd-workflow';
+    select.setAttribute('aria-label', 'Review workflow');
+    select.addEventListener('change', () => {
+      if (!lastMount?.onChange) return;
+      activeGroup = null;
+      shownWorkflow = select.value;
+      const state = normalizeWorkflowState(lastMount.settings.reviewWorkflows, select.value, lastMount.settings.reviewFilters);
+      lastMount.onChange({ reviewWorkflows: state.reviewWorkflows, reviewFilters: state.reviewFilters, activeReviewWorkflow: select.value });
+    });
+    const edit = panel.ownerDocument.createElement('button');
+    edit.type = 'button';
+    edit.className = 'bbrd-workflow-edit';
+    edit.textContent = 'Edit';
+    edit.addEventListener('click', () => {
+      editorOpen = true;
+      if (!lastMount) return;
+      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
+    });
+    pick.append(select);
+    info?.after(pick);
+    pick.after(edit);
+    if (head && !head.contains(pick)) head.append(pick, edit);
     panel.append(section);
   }
   const heading = section.querySelector('h3');
   if (heading && heading.textContent !== REVIEW_TITLE) heading.textContent = REVIEW_TITLE;
   const info = section.querySelector('.bbrd-info');
   if (info && info.getAttribute('title') !== REVIEW_HELP) info.setAttribute('title', REVIEW_HELP);
+  const select = section.querySelector('.bbrd-workflow');
+  if (select instanceof HTMLSelectElement) paintWorkflowPick(select, settings);
+  section.querySelector('.bbrd-workflow-panel')?.remove();
+  const edit = section.querySelector('.bbrd-workflow-edit');
+  if (edit instanceof HTMLButtonElement) {
+    edit.textContent = 'Edit';
+    edit.setAttribute('aria-expanded', editorOpen ? 'true' : 'false');
+  }
+  ensureDialog(panel.ownerDocument, settings, onChange);
   return section;
+}
+
+/**
+ * @param {Document} doc
+ * @param {{ reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], reviewFilters?: import('../core/review-workflows.js').ReviewFilter[], activeReviewWorkflow?: string }} settings
+ * @param {WorkflowChange | null} onChange
+ */
+function ensureDialog(doc, settings, onChange) {
+  let backdrop = doc.querySelector('.bbrd-dialog-backdrop');
+  if (!editorOpen) {
+    backdrop?.remove();
+    return;
+  }
+  if (!backdrop) {
+    backdrop = doc.createElement('div');
+    backdrop.className = 'bbrd-dialog-backdrop';
+    backdrop.innerHTML = [
+      '<div class="bbrd-dialog" role="dialog" aria-modal="true" aria-labelledby="bbrd-dialog-title">',
+      '<div class="bbrd-dialog-head">',
+      '<div class="bbrd-dialog-titles"><h2 id="bbrd-dialog-title">Edit workflow</h2><p class="bbrd-dialog-subtitle"></p></div>',
+      '<button type="button" class="bbrd-dialog-close" aria-label="Close">×</button>',
+      '</div>',
+      '<div class="bbrd-dialog-body"></div>',
+      '<div class="bbrd-dialog-foot"><button type="button" class="bbrd-dialog-done">Done</button></div>',
+      '</div>',
+    ].join('');
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) closeWorkflowDialog(doc);
+    });
+    backdrop.querySelector('.bbrd-dialog-close')?.addEventListener('click', () => closeWorkflowDialog(doc));
+    backdrop.querySelector('.bbrd-dialog-done')?.addEventListener('click', () => closeWorkflowDialog(doc));
+    doc.body.append(backdrop);
+    backdrop.querySelector('.bbrd-dialog-done')?.focus();
+  }
+  const state = normalizeWorkflowState(settings.reviewWorkflows, settings.activeReviewWorkflow, settings.reviewFilters);
+  const workflow = state.reviewWorkflows.find((item) => item.id === state.activeReviewWorkflow) ?? state.reviewWorkflows[0];
+  const subtitle = backdrop.querySelector('.bbrd-dialog-subtitle');
+  if (subtitle) subtitle.textContent = workflow?.name ?? '';
+  const body = backdrop.querySelector('.bbrd-dialog-body');
+  if (body instanceof HTMLElement && onChange) mountWorkflowEditor(body, settings, onChange);
+}
+
+/** @param {Document} doc */
+function closeWorkflowDialog(doc) {
+  editorOpen = false;
+  doc.querySelector('.bbrd-dialog-backdrop')?.remove();
+  const edit = doc.querySelector('.bbrd-workflow-edit');
+  if (edit instanceof HTMLButtonElement) edit.setAttribute('aria-expanded', 'false');
+}
+
+/**
+ * @param {HTMLSelectElement} select
+ * @param {{ reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], activeReviewWorkflow?: string }} settings
+ */
+function paintWorkflowPick(select, settings) {
+  const state = normalizeWorkflowState(settings.reviewWorkflows, settings.activeReviewWorkflow);
+  const signature = `${state.reviewWorkflows.map((item) => `${item.id}\t${item.name}`).join('\n')}\n${state.activeReviewWorkflow}`;
+  if (select.dataset.signature === signature) return;
+  select.dataset.signature = signature;
+  select.replaceChildren();
+  for (const workflow of state.reviewWorkflows) {
+    const option = select.ownerDocument.createElement('option');
+    option.value = workflow.id;
+    option.textContent = workflow.name;
+    select.append(option);
+  }
+  select.value = state.activeReviewWorkflow;
+}
+
+/** @param {Document} doc */
+function ensureWorkflowOpen(doc) {
+  if (wiredDocs.has(doc)) return;
+  wiredDocs.add(doc);
+  doc.addEventListener('bbrd-edit-workflow', () => {
+    editorOpen = true;
+    if (!lastMount) return;
+    mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
+  });
+  doc.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && editorOpen) closeWorkflowDialog(doc);
+  });
 }
 
 /** @param {Element} item */
@@ -260,9 +421,13 @@ function sumPhrase(text, kind) {
   return total;
 }
 
-/** @param {ParentNode} root */
-function filesIn(root) {
-  /** @type {{ path: string, group: import('../core/review-groups.js').ReviewGroup, item: Element }[]} */
+/**
+ * @param {ParentNode} root
+ * @param {import('../core/review-workflows.js').WorkflowGroup[]} groups
+ * @param {import('../core/review-workflows.js').ReviewFilter[]} filters
+ */
+function filesIn(root, groups, filters) {
+  /** @type {ReviewFile[]} */
   const files = [];
   const seen = new Set();
   if (!root.querySelectorAll) return files;
@@ -272,7 +437,7 @@ function filesIn(root) {
     seen.add(path);
     const item = link.closest('li') ?? link;
     const lines = readLines(item);
-    files.push({ path, group: reviewGroup(path), item, added: lines.added, removed: lines.removed });
+    files.push({ path, group: assignGroup(path, groups, filters), item, added: lines.added, removed: lines.removed });
   }
   return files;
 }
@@ -305,10 +470,12 @@ function reviewedPaths(root, pr, storage) {
 
 /**
  * @param {ParentNode} root
- * @param {{ path: string, group: import('../core/review-groups.js').ReviewGroup, item: Element }[]} files
+ * @param {ReviewFile[]} files
+ * @param {import('../core/review-workflows.js').WorkflowGroup[]} groups
  * @param {Set<string>} reviewed
+ * @param {import('../core/review-workflows.js').ReviewFilter[]} filters
  */
-function applyGroupFilter(root, files, reviewed) {
+function applyGroupFilter(root, files, groups, reviewed, filters) {
   const active = activeGroup;
   const hidePath = (path, group) => (Boolean(active) && group !== active) || (unviewedOnly && reviewed.has(path));
   for (const file of files) {
@@ -317,7 +484,7 @@ function applyGroupFilter(root, files, reviewed) {
   if (root.querySelectorAll) {
     for (const article of findFileDiffs(root)) {
       const path = normalizePath(getFilePath(article));
-      const hide = !!path && hidePath(path, reviewGroup(path));
+      const hide = !!path && hidePath(path, assignGroup(path, groups, filters));
       article.classList.toggle('bbrd-group-hidden', hide);
     }
     for (const folder of root.querySelectorAll('#file-tree li')) {

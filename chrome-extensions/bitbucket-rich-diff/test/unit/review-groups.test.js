@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { mountReviewGroups, resetReviewGroup } from '../../src/content/review-groups.js';
 import { firstUnfinishedGroup, nextUnviewed, parseReviewedState, reviewGroup } from '../../src/core/review-groups.js';
+import { assignGroup, dotnetWorkflow, normalizeWorkflowState } from '../../src/core/review-workflows.js';
 
 describe('reviewGroup', () => {
   it('splits build and config from the application, tests, and notes', () => {
@@ -137,7 +138,9 @@ describe('mountReviewGroups', () => {
 
     document.querySelector('[data-group="docs"]').click();
     expect(document.querySelector('.bbrd-group-hidden')).toBeNull();
-    document.querySelector('.bbrd-review-continue').click();
+    const continueButton = document.querySelector('.bbrd-review-continue');
+    expect(continueButton.textContent).toBe('Continue to Infrastructure');
+    continueButton.click();
     const infrastructureCard = document.querySelector('[data-group="infrastructure"]');
     expect(infrastructureCard.getAttribute('aria-pressed')).toBe('true');
     expect(infrastructureCard.querySelector('.bbrd-group-state').textContent).toBe('Showing');
@@ -153,5 +156,88 @@ describe('mountReviewGroups', () => {
     mountReviewGroups(document, null, storage, { hideReviewGroups: true });
     expect(document.querySelector('.bbrd-review')).toBeNull();
     expect(document.querySelector('.bbrd-group-hidden')).toBeNull();
+  });
+});
+
+describe('review workflows', () => {
+  beforeEach(() => resetReviewGroup());
+
+  it('keeps the .NET sample and lets a path pattern claim a file first', () => {
+    expect(normalizeWorkflowState(undefined, 'missing').activeReviewWorkflow).toBe('dotnet');
+    expect(normalizeWorkflowState(undefined, 'dotnet').reviewWorkflows[0].name).toBe('.NET Workflow');
+    expect(normalizeWorkflowState([{ id: 'dotnet', name: 'Renamed', groups: [{ id: 'bad id', name: '', color: 'blue', filter: 'nope', pattern: '' }] }], 'dotnet').reviewWorkflows[0].groups[0]).toMatchObject({
+      id: 'badid',
+      name: 'Group',
+      color: '#1558bc',
+      filterId: '',
+    });
+    const sample = dotnetWorkflow().groups;
+    expect(assignGroup('src/Api.Tests/Api.Tests.csproj', sample)).toBe('tests');
+    expect(assignGroup('src/Api.Tests/PaymentTests.cs', sample)).toBe('tests');
+    expect(assignGroup('src/Api/Api.csproj', sample)).toBe('infrastructure');
+    expect(assignGroup('serverless console/build.cake', sample)).toBe('infrastructure');
+    expect(assignGroup('serverless console/src/Dockerfile.api', sample)).toBe('infrastructure');
+    expect(assignGroup('infra/main.tf', sample)).toBe('infrastructure');
+    expect(assignGroup('src/appsettings.Development.json', sample)).toBe('infrastructure');
+    expect(assignGroup('.github/workflows/ci.yml', sample)).toBe('infrastructure');
+    expect(assignGroup('package-lock.json', sample)).toBe('infrastructure');
+    expect(assignGroup('CODEOWNERS', sample)).toBe('infrastructure');
+    expect(assignGroup('.env.production', sample)).toBe('infrastructure');
+    expect(assignGroup('config/production.env', sample)).toBe('infrastructure');
+    expect(assignGroup('pnpm-lock.yaml', sample)).toBe('infrastructure');
+    expect(assignGroup('assets/app.min.css', sample)).toBe('infrastructure');
+    expect(assignGroup('src/Api/Api.g.i.cs', sample)).toBe('infrastructure');
+    expect(assignGroup('src/Api/Dto.generated.cs', sample)).toBe('infrastructure');
+    expect(assignGroup('README.md', sample)).toBe('docs');
+    expect(assignGroup('docs/LICENSE', sample)).toBe('docs');
+    expect(assignGroup('src/App.cs', sample)).toBe('business');
+    const custom = [
+      { id: 'sql', name: 'SQL', color: '#ae2e24', filter: 'pattern', pattern: String.raw`\.sql$` },
+      { id: 'other', name: 'Other', color: '#206a83', filter: 'rest', pattern: '' },
+    ];
+    expect(assignGroup('db/migrate.sql', custom)).toBe('sql');
+    expect(assignGroup('src/App.cs', custom)).toBe('other');
+  });
+
+  it('shows the selected workflow and saves a new group', () => {
+    document.body.innerHTML = `
+      <section class="bbrd-stats"></section>
+      <ul id="file-tree">
+        <li><a href="#chg-db/migrate.sql">migrate.sql</a></li>
+        <li><a href="#chg-src/App.cs">App.cs</a></li>
+      </ul>`;
+    const settings = {
+      reviewWorkflows: [
+        dotnetWorkflow(),
+        {
+          id: 'sql',
+          name: 'SQL pass',
+          groups: [
+            { id: 'sql', name: 'SQL', color: '#ae2e24', filter: 'pattern', pattern: String.raw`\.sql$` },
+            { id: 'other', name: 'Other', color: '#206a83', filter: 'rest', pattern: '' },
+          ],
+        },
+      ],
+      activeReviewWorkflow: 'sql',
+    };
+    const saved = [];
+    mountReviewGroups(document, null, { getItem: () => null }, settings, (patch) => saved.push(patch));
+    expect(document.querySelector('.bbrd-workflow').value).toBe('sql');
+    expect([...document.querySelectorAll('.bbrd-group-name')].map((node) => node.textContent)).toEqual(['SQL', 'Other']);
+    expect(document.querySelector('[data-group="sql"]').style.getPropertyValue('--bbrd-group-ink')).toBe('#ae2e24');
+    document.querySelector('[data-group="sql"]').click();
+    expect(document.querySelector('a[href="#chg-src/App.cs"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(true);
+    expect(document.querySelector('a[href="#chg-db/migrate.sql"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(false);
+
+    document.querySelector('.bbrd-workflow-edit').click();
+    const dialog = document.querySelector('.bbrd-dialog');
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.querySelector('h2').textContent).toBe('Edit workflow');
+    expect(document.querySelector('.bbrd-pattern').value).toBe(String.raw`\.sql$`);
+    document.querySelector('[data-act="add-group"]').click();
+    expect(saved.at(-1).reviewWorkflows.find((workflow) => workflow.id === 'sql').groups).toHaveLength(3);
+    document.querySelectorAll('.bbrd-group-edit [data-act="up"]')[1].click();
+    const names = saved.at(-1).reviewWorkflows.find((workflow) => workflow.id === 'sql').groups.map((group) => group.name);
+    expect(names[0]).toBe('Other');
   });
 });

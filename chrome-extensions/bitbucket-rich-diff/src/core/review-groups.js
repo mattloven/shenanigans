@@ -123,16 +123,17 @@ export function normalizePath(path) {
  * The next file to open. With a group selected, only that group is walked, in tree order.
  * With none selected, groups are walked infrastructure, business, tests, then documentation.
  * The search starts after the file already on screen and wraps around.
- * @param {Array<{ path: string, group: ReviewGroup }>} files
+ * @param {Array<{ path: string, group: string }>} files
  * @param {Set<string>} reviewed
- * @param {ReviewGroup | null} group
+ * @param {string | null} group
  * @param {string | null} current
- * @returns {{ path: string, group: ReviewGroup } | null}
+ * @param {string[]} [order] review order, left to right
+ * @returns {{ path: string, group: string } | null}
  */
-export function nextUnviewed(files, reviewed, group, current) {
-  const rank = new Map(REVIEW_GROUPS.map((item, index) => [item.id, index]));
+export function nextUnviewed(files, reviewed, group, current, order = REVIEW_GROUPS.map((item) => item.id)) {
+  const rank = new Map(order.map((id, index) => [id, index]));
   const pool = files.filter((file) => !group || file.group === group);
-  const ordered = group ? pool : [...pool].sort((a, b) => rank.get(a.group) - rank.get(b.group));
+  const ordered = group ? pool : [...pool].sort((a, b) => (rank.get(a.group) ?? order.length) - (rank.get(b.group) ?? order.length));
   if (!ordered.length) return null;
   const start = current ? ordered.findIndex((file) => file.path === current) : -1;
   for (let step = 1; step <= ordered.length; step += 1) {
@@ -144,13 +145,14 @@ export function nextUnviewed(files, reviewed, group, current) {
 
 /**
  * The first group in review order that still has a file to view.
- * @param {Array<{ group: ReviewGroup, count: number, viewed: number }>} rows
- * @returns {ReviewGroup | null}
+ * @param {Array<{ group: string, count: number, viewed: number }>} rows
+ * @param {string[]} [order] review order, left to right
+ * @returns {string | null}
  */
-export function firstUnfinishedGroup(rows) {
-  for (const group of REVIEW_GROUPS) {
-    const row = rows.find((item) => item.group === group.id);
-    if (row && row.count > 0 && row.viewed < row.count) return group.id;
+export function firstUnfinishedGroup(rows, order = REVIEW_GROUPS.map((item) => item.id)) {
+  for (const id of order) {
+    const row = rows.find((item) => item.group === id);
+    if (row && row.count > 0 && row.viewed < row.count) return id;
   }
   return null;
 }
