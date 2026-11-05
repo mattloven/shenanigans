@@ -151,4 +151,78 @@ function pageHtml() {
       const files = ${JSON.stringify(MOCK_FILES.map((f) => ({ path: f.path, html: articleHtml(f) })))};
       const fileListMarkup = ${JSON.stringify(fileListHtml(MOCK_FILES))};
       const fileCount = ${MOCK_FILES.length};
-      // Bitbucket renders fil
+      // Bitbucket renders file diffs asynchronously after the SPA boots.
+      setTimeout(() => {
+        document.getElementById('files').innerHTML = files.map((f) => f.html).join('');
+        document.getElementById('file-list').innerHTML = fileListMarkup;
+        for (const header of document.querySelectorAll('.file-header')) {
+          header.addEventListener('click', () => header.closest('article').classList.toggle('collapsed'));
+        }
+      }, 300);
+      window.__replaceDiffToolbar = () => {
+        const bar = document.querySelector('.diff-bar');
+        const next = document.createElement('div');
+        next.className = 'diff-bar';
+        next.innerHTML = '<span data-qa="files-viewed-count">0 of ' + fileCount + ' files viewed</span><button type="button" class="icon-btn"><span class="vh">Global diff settings</span></button>';
+        bar.replaceWith(next);
+      };
+      window.__replaceFileTree = () => {
+        const list = document.getElementById('file-list');
+        const next = document.createElement('ul');
+        next.id = 'file-list';
+        next.setAttribute('role', 'list');
+        next.innerHTML = fileListMarkup;
+        list.replaceWith(next);
+        const changed = document.querySelector('[data-qa="files-changed-count"]');
+        if (changed) {
+          changed.textContent = fileCount + ' files changed';
+          delete changed.dataset.bbrdChangedOriginal;
+        }
+        const viewed = document.querySelector('[data-qa="files-viewed-count"]');
+        if (viewed) {
+          viewed.textContent = '0 of ' + fileCount + ' files viewed';
+          delete viewed.dataset.bbrdViewedOriginal;
+        }
+      };
+      window.__rerenderHeader = (index) => {
+        const header = document.querySelectorAll('[data-qa="bk-file__header"]')[index];
+        const clone = header.cloneNode(true);
+        clone.querySelectorAll('.bbrd-tabs').forEach((n) => n.remove());
+        clone.addEventListener('click', () => clone.closest('article').classList.toggle('collapsed'));
+        header.replaceWith(clone);
+      };
+    </script>
+  </body></html>`;
+}
+
+function side(file, which) {
+  const content = which === 'old' ? file.old : file.new;
+  if (content === null) return null;
+  const commit = which === 'old' ? OLD_COMMIT : NEW_COMMIT;
+  return { path: file.path, type: 'commit_file', links: { self: { href: `${API}/src/${commit}/${file.path}` } } };
+}
+
+/** @param {import('playwright-core').BrowserContext} context */
+export async function installMockBitbucket(context, { onApiRequest } = {}) {
+  const png = fs.readFileSync(path.resolve(here, '../../assets/icons/icon-128.png'));
+  await context.route(/^https:\/\/bitbucket\.org\/acme\/payments\/pull-requests\/42/, (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: pageHtml() }),
+  );
+  await context.route(`${API}/**`, (route) => {
+    const url = new URL(route.request().url());
+    onApiRequest?.(url);
+    if (url.pathname.endsWith('/pullrequests/42/diffstat')) {
+      const values = MOCK_FILES.map((f) => ({ type: 'diffstat', status: f.status, old: side(f, 'old'), new: side(f, 'new') }));
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ values, pagelen: 500, size: values.length, page: 1 }) });
+    }
+    const m = url.pathname.match(/\/src\/([^/]+)\/(.+)$/);
+    if (m) {
+      const file = MOCK_FILES.find((f) => f.path === decodeURIComponent(m[2]));
+      const content = file && (m[1] === OLD_COMMIT ? file.old : file.new);
+      if (content == null) return route.fulfill({ status: 404, body: 'not found' });
+      return route.fulfill({ status: 200, contentType: 'text/plain', body: content });
+    }
+    return route.fulfill({ status: 404, body: 'not mocked' });
+  });
+  await context.route(/^https:\/\/bitbucket\.org\/acme\/payments\/raw\//, (route) => route.fulfill({ status: 200, contentType: 'image/png', body: png }));
+}
