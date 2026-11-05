@@ -55,13 +55,14 @@
           </label>
           <label class="row"><input type="checkbox" name="hideCodeComments" /> Hide code comments (JS, TS, C#)</label>
           <label class="row"><input type="checkbox" name="hideSummaryComments" /> Hide summary comments (/// and /** */)</label>
+          <p class="hint">A line that is only a comment folds into a Comment section you can open. A comment after code on the same line comes off that line, and the code stays.</p>
           <label class="row"><input type="checkbox" name="hideTestFolders" /> Hide test projects (folders ending in Tests)</label>
           <label class="row"><input type="checkbox" name="hideProjects" /> Hide solution and project files (.sln, .slnx, .csproj, and other project types)</label>
           <label class="row"><input type="checkbox" name="hideGenerated" /> Hide generated files (lockfiles, minified code, Designer.cs)</label>
           <label class="row"><input type="checkbox" name="hideCommentFiles" /> Hide files whose only changes are comments</label>
           <label class="row">
             Hide pattern
-            <input type="text" name="hidePattern" placeholder="\.Tests|tmp/" spellcheck="false" />
+            <input type="text" name="hidePattern" placeholder="\\.Tests|tmp/" spellcheck="false" />
           </label>
         </fieldset>
 
