@@ -95,8 +95,10 @@ describe('mountFileFilters', () => {
     expect(document.querySelectorAll('.bbrd-hidden-bar')).toHaveLength(0);
     expect(document.querySelector('.sidebar .bbrd-hidden-toggle')).toBeNull();
     expect(document.querySelector('.bbrd-filters .bbrd-hidden-toggle').hidden).toBe(false);
-    expect(document.querySelector('[data-qa="files-viewed-count"]').textContent).toBe('0 of 1 files viewed');
-    expect(document.querySelector('[data-qa="files-changed-count"]').textContent).toBe('1 files changed');
+    expect(document.querySelector('[data-qa="files-viewed-count"]').textContent).toBe('0 of 1 viewed · 2 files');
+    expect(document.querySelector('[data-qa="files-viewed-count"]').dataset.bbrdViewedOriginal).toBe('0 of 2 files viewed');
+    expect(document.querySelector('[data-qa="files-changed-count"]').textContent).toBe('1 of 2 files changed');
+    expect(document.querySelector('[data-qa="files-changed-count"]').dataset.bbrdChangedOriginal).toBe('2 files changed');
 
     document.querySelector('.bbrd-filters .bbrd-hidden-toggle').click();
     expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
@@ -115,6 +117,16 @@ describe('mountFileFilters', () => {
     pattern.value = 'still typing';
     mountFileFilters(document, { ...DEFAULT_SETTINGS, hideMarkdown: true, hidePattern: '' }, onChange);
     expect(pattern.value).toBe('still typing');
+    expect(document.querySelector('[data-qa="files-viewed-count"]').textContent).toBe('0 of 1 viewed · 2 files');
+    expect(document.querySelector('[data-qa="files-viewed-count"]').dataset.bbrdViewedOriginal).toBe('0 of 2 files viewed');
+    expect(document.querySelector('[data-qa="files-changed-count"]').textContent).toBe('1 of 2 files changed');
+
+    const visible = document.querySelector('article[aria-label="Diff of file src/App.cs"]');
+    const hidden = document.querySelector('article[aria-label="Diff of file README.md"]');
+    visible.innerHTML = '<label><input type="checkbox" checked> Viewed</label>';
+    hidden.innerHTML = '<label><input type="checkbox" checked> Viewed</label>';
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, hideMarkdown: true }, onChange);
+    expect(document.querySelector('[data-qa="files-viewed-count"]').textContent).toBe('1 of 1 viewed · 2 files');
   });
 
   it('keeps a hidden folder in the tree and marks it with one pill', () => {
