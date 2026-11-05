@@ -47,7 +47,7 @@ The new version is rendered like a document, with changes marked the way Word's 
     old and new checkbox.
   - **Tables**: row by row, with cell-level word changes. If the column layout changed, the whole
     table is shown as replaced.
-  - **Code blocks**: line by line, with +− markers.
+  - **Code blocks**: line by line, with +/− markers.
   - Inline code and images are atomic: they are shown as replaced, never split.
 - Toolbar (sticky below the file header):
   - Change counts (+ added, − removed, ~ changed).
