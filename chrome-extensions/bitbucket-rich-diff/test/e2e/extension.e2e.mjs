@@ -94,4 +94,13 @@ describe('mock pull request', () => {
 
   it('shows stats and navigates between changes', async () => {
     const readme = article('README.md');
-    assert.equal(await readme.locator('.stats').getAttribute
+    assert.equal(await readme.locator('.stats').getAttribute('aria-label'), '3 added, 1 removed, 8 changed');
+    assert.equal(await readme.locator('.counter').textContent(), '12 changes');
+    await readme.locator('[data-action="next"]').click();
+    assert.equal(await readme.locator('.counter').textContent(), '1 / 12');
+    await readme.locator('[data-action="prev"]').click();
+    assert.equal(await readme.locator('.counter').textContent(), '12 / 12');
+  });
+
+  it('hides deletions and folds unchanged sections, and persists the toggles', async () => {
+ 
