@@ -1,10 +1,9 @@
-import { CATEGORY_LABEL, CATEGORY_ORDER, compileHidePattern, fileCategory, formatHideSummary, isHiddenFolder, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
+import { CATEGORY_LABEL, CATEGORY_ORDER, compileHidePattern, fileCategory, formatCount, formatHideSummary, groupCountText, isHiddenFolder, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
-const COG_NAME = 'Global diff settings';
 const MENU_LABEL = 'Hide files and comments';
-const VIEWED_COUNTER = /^(\d+)\s+of\s+(\d+)\s+files?\s+viewed$/i;
-const CHANGED_COUNTER = /^(\d+)\s+files?\s+changed$/i;
+const VIEWED_COUNTER = /^(\d[\d,]*)\s+of\s+(\d[\d,]*)\s+files?\s+viewed$/i;
+const CHANGED_COUNTER = /^(\d[\d,]*)\s+files?\s+changed$/i;
 const ORIGINAL_VIEWED = 'bbrdViewedOriginal';
 const ORIGINAL_CHANGED = 'bbrdChangedOriginal';
 
@@ -25,9 +24,9 @@ export function resetHiddenReveal() {
 }
 
 /**
- * Puts one Hide menu immediately to the left of Bitbucket's Files changed cog and hides matching
- * files in the list and the diff. Safe to call on every scan: a re-rendered toolbar is given the
- * same menu, and any older copy is removed.
+ * Puts one Hide menu in the top right of the summary bar and hides matching files in the list
+ * and the diff. Safe to call on every scan: a re-rendered bar is given the same menu, and any
+ * older copy is removed.
  *
  * @param {ParentNode} root
  * @param {import('../core/settings.js').Settings} settings
@@ -39,9 +38,9 @@ export function mountFileFilters(root, settings, onChange, commentOnly = new Set
   lastApply = { root, settings, onChange, commentOnly };
   const doc = documentOf(root);
   ensureDismiss(doc);
-  const cog = findCog(root);
-  if (cog?.parentElement) {
-    const host = ensureHost(doc, cog);
+  const slot = doc.querySelector('.bbrd-stats-actions');
+  if (slot) {
+    const host = ensureHost(doc);
     const panel = ensurePanel(doc, onChange);
     for (const extra of doc.querySelectorAll('.bbrd-menu-host')) {
       if (extra !== host) extra.remove();
@@ -49,9 +48,7 @@ export function mountFileFilters(root, settings, onChange, commentOnly = new Set
     for (const extra of doc.querySelectorAll('.bbrd-filters')) {
       if (extra !== panel) extra.remove();
     }
-    if (host.parentElement !== cog.parentElement || host.nextElementSibling !== cog) {
-      cog.parentElement.insertBefore(host, cog);
-    }
+    if (host.parentElement !== slot) slot.append(host);
     if (panel.parentElement !== doc.body) doc.body.append(panel);
     syncPanel(panel, settings);
     if (!panel.hidden) placeMenu(host, panel);
@@ -66,39 +63,10 @@ function documentOf(root) {
   return root.ownerDocument ?? document;
 }
 
-function findCog(root) {
-  if (!root.querySelectorAll) return null;
-  let match = null;
-  for (const button of root.querySelectorAll('button')) {
-    if (!(button instanceof HTMLButtonElement)) continue;
-    if (button.closest('.bbrd-menu-host, [role="dialog"]')) continue;
-    if (!buttonName(button).includes(COG_NAME)) continue;
-    if (!isShown(button)) continue;
-    match = button;
-  }
-  return match;
-}
-
-function buttonName(button) {
-  return `${button.getAttribute('aria-label') ?? ''} ${button.getAttribute('title') ?? ''} ${button.textContent ?? ''}`.replace(/\s+/g, ' ');
-}
-
-function isShown(element) {
-  if (!element.isConnected) return false;
-  for (let node = element; node && node.nodeType === 1; node = node.parentElement) {
-    if (node.hidden) return false;
-    const style = node.ownerDocument.defaultView?.getComputedStyle(node);
-    if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
-  }
-  return true;
-}
-
-function ensureHost(doc, cog) {
+function ensureHost(doc) {
   const existing = doc.querySelector('.bbrd-menu-host');
   if (existing) return existing;
-  const host = buildHost(doc);
-  cog.parentElement.insertBefore(host, cog);
-  return host;
+  return buildHost(doc);
 }
 
 function ensurePanel(doc, onChange) {
@@ -106,6 +74,8 @@ function ensurePanel(doc, onChange) {
   if (!panel) {
     panel = buildPanel();
     doc.body.append(panel);
+  } else {
+    parkSummary(panel);
   }
   changeHandlers.set(panel, onChange);
   return panel;
@@ -144,6 +114,20 @@ function buildHost(doc) {
   return host;
 }
 
+/** Keeps an already-open menu in the new shape: the hidden-file summary sits under the options. */
+function parkSummary(panel) {
+  let foot = panel.querySelector('.bbrd-filters-foot');
+  if (!foot) {
+    foot = panel.querySelector('.bbrd-hidden-actions');
+    if (!foot) return;
+    foot.classList.remove('bbrd-hidden-actions');
+    foot.classList.add('bbrd-filters-foot');
+  }
+  if (panel.lastElementChild !== foot) panel.append(foot);
+  const head = panel.querySelector('.bbrd-filters-head');
+  if (head && head.textContent.replace(/\s+/g, ' ').trim() !== 'Hide') head.textContent = 'Hide';
+}
+
 function buildPanel() {
   const panel = document.createElement('div');
   panel.id = 'bbrd-hide-menu';
@@ -152,13 +136,7 @@ function buildPanel() {
   panel.setAttribute('aria-label', MENU_LABEL);
   panel.hidden = true;
   panel.innerHTML = `
-    <div class="bbrd-filters-head">
-      <span>Hide</span>
-      <span class="bbrd-hidden-actions">
-        <span class="bbrd-hidden-count" aria-live="polite"></span>
-        <button type="button" class="bbrd-hidden-toggle" hidden>Show</button>
-      </span>
-    </div>
+    <div class="bbrd-filters-head">Hide</div>
     <label class="bbrd-check" title="Also hides .markdown and the other markdown extensions"><input type="checkbox" data-filter="hideMarkdown" /> Markdown files</label>
     <label class="bbrd-check" title="Line comments and block comments"><input type="checkbox" data-filter="hideCodeComments" /> Code comments</label>
     <label class="bbrd-check" title="C# documentation comments and JSDoc blocks"><input type="checkbox" data-filter="hideSummaryComments" /> Summary comments</label>
@@ -169,7 +147,11 @@ function buildPanel() {
     <label class="bbrd-check" title="A file whose only changes are comments"><input type="checkbox" data-filter="hideCommentFiles" /> Comment-only files</label>
     <label class="bbrd-ext">Extensions <input type="text" data-filter="hiddenExtensions" placeholder="svg, lock, min.js" spellcheck="false" /></label>
     <label class="bbrd-ext">Pattern <input type="text" data-filter="hidePattern" placeholder="\\.Tests|tmp/" spellcheck="false" /></label>
-    <p class="bbrd-hint">Regular expression. Matches the path, a folder, or the file name.</p>`;
+    <p class="bbrd-hint">Regular expression. Matches the path, a folder, or the file name.</p>
+    <div class="bbrd-filters-foot" hidden>
+      <span class="bbrd-hidden-count" aria-live="polite"></span>
+      <button type="button" class="bbrd-hidden-toggle" hidden>Show</button>
+    </div>`;
   panel.addEventListener('click', (event) => {
     event.stopPropagation();
     const toggle = event.target.closest('.bbrd-hidden-toggle');
@@ -324,6 +306,8 @@ function syncFlyoutSummary(root, summary) {
   if (!panel) return;
   const count = panel.querySelector('.bbrd-hidden-count');
   if (count && count.textContent !== summary) count.textContent = summary;
+  const foot = panel.querySelector('.bbrd-filters-foot');
+  if (foot) foot.hidden = !summary;
   const toggle = panel.querySelector('.bbrd-hidden-toggle');
   if (!toggle) return;
   if (!summary) {
@@ -339,12 +323,12 @@ function syncFlyoutSummary(root, summary) {
 
 function readStat(element) {
   const text = element?.textContent ?? '';
-  return { added: sumPhrase(text, /(\d+)\s+lines?\s+added/gi), removed: sumPhrase(text, /(\d+)\s+lines?\s+removed/gi) };
+  return { added: sumPhrase(text, /([\d,]+)\s+lines?\s+added/gi), removed: sumPhrase(text, /([\d,]+)\s+lines?\s+removed/gi) };
 }
 
 function sumPhrase(text, pattern) {
   let total = 0;
-  for (const match of text.matchAll(pattern)) total += Number(match[1]);
+  for (const match of text.matchAll(pattern)) total += Number(match[1].replaceAll(',', ''));
   return total;
 }
 
@@ -383,12 +367,12 @@ function syncFileCounters(root, hiddenCount) {
       const actual = Math.max(0, total - hiddenCount);
       const nextViewed = viewedVisible == null ? Math.min(viewed, actual) : Math.min(viewedVisible, actual);
       const word = total === 1 ? 'file' : 'files';
-      return `${nextViewed} of ${actual} viewed · ${total} ${word}`;
+      return `${formatCount(nextViewed)} of ${formatCount(actual)} viewed · ${formatCount(total)} ${word}`;
     });
     rewriteCounter(node, CHANGED_COUNTER, ORIGINAL_CHANGED, exclude, hiddenCount, (_count, total, source) => {
       const actual = Math.max(0, total - hiddenCount);
       const word = /\bfile\b/i.test(source) && !/\bfiles\b/i.test(source) ? 'file' : 'files';
-      return `${actual} of ${total} ${word} changed`;
+      return `${formatCount(actual)} of ${formatCount(total)} ${word} changed`;
     });
   }
 }
@@ -421,11 +405,12 @@ function rewriteCounter(node, pattern, datasetKey, exclude, hiddenCount, format)
   if (!match) return;
   if (!stored) node.dataset[datasetKey] = source;
   if (!exclude || !hiddenCount) {
-    if (node.textContent !== node.dataset[datasetKey]) node.textContent = node.dataset[datasetKey];
+    const restored = groupCountText(node.dataset[datasetKey]);
+    if (node.textContent !== restored) node.textContent = restored;
     return;
   }
-  const first = Number(match[1]);
-  const total = match[2] != null ? Number(match[2]) : first;
+  const first = Number(match[1].replaceAll(',', ''));
+  const total = match[2] != null ? Number(match[2].replaceAll(',', '')) : first;
   const next = format(first, total, source);
   if (node.textContent !== next) node.textContent = next;
 }

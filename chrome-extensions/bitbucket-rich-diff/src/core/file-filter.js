@@ -150,6 +150,18 @@ export function isHiddenFile(path, settings, commentOnly) {
   return fileCategory(path, settings, commentOnly) !== null;
 }
 
+/** Groups thousands. Bitbucket prints 1404; we show 1,404. */
+export function formatCount(value) {
+  const n = Math.trunc(Number(value) || 0);
+  const sign = n < 0 ? '-' : '';
+  return sign + String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/** Puts thousands separators into count text. A value that already has them is left as it is. */
+export function groupCountText(text) {
+  return String(text).replace(/\d{4,}/g, (digits) => formatCount(digits));
+}
+
 /**
  * "6 hidden · 4 tests · 1 project +12 −3"
  * @param {Partial<Record<HideCategory, number>>} counts
@@ -158,15 +170,15 @@ export function isHiddenFile(path, settings, commentOnly) {
 export function formatHideSummary(counts, lines) {
   const total = CATEGORY_ORDER.reduce((sum, key) => sum + (counts[key] || 0), 0);
   if (!total) return '';
-  const parts = [`${total} hidden`];
+  const parts = [`${formatCount(total)} hidden`];
   for (const key of CATEGORY_ORDER) {
     const count = counts[key] || 0;
     if (!count) continue;
     const [one, many] = CATEGORY_WORD[key];
-    parts.push(`${count} ${count === 1 ? one : many}`);
+    parts.push(`${formatCount(count)} ${count === 1 ? one : many}`);
   }
   let text = parts.join(' · ');
-  if (lines && (lines.added || lines.removed)) text += ` +${lines.added || 0} −${lines.removed || 0}`;
+  if (lines && (lines.added || lines.removed)) text += ` +${formatCount(lines.added || 0)} −${formatCount(lines.removed || 0)}`;
   return text;
 }
 

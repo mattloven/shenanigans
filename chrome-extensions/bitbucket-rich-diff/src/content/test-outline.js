@@ -1,4 +1,5 @@
 import { commentLanguage } from '../core/comments.js';
+import { formatCount } from '../core/file-filter.js';
 import { findTestSpans, isTestFile } from '../core/test-outline.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
@@ -61,12 +62,14 @@ function applySpan(path, rows, lines, span, index) {
   title.textContent = span.title;
   const stat = document.createElement('span');
   stat.className = 'bbrd-test-stat';
-  stat.textContent = `+${added} −${removed}`;
+  stat.textContent = `+${formatCount(added)} −${formatCount(removed)}`;
   fold.append(title, stat);
   const nodes = nodesInSpan(start, end);
   const open = openTests.has(key);
   fold.setAttribute('aria-expanded', open ? 'true' : 'false');
   for (const node of nodes) node.classList.toggle('bbrd-test-collapsed', !open);
+  // Focusing the bar scrolls it into view and fights the wheel gesture.
+  fold.addEventListener('mousedown', (event) => event.preventDefault());
   fold.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();

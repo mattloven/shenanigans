@@ -55,13 +55,13 @@ article[data-bbrd-view]:not([data-bbrd-view='diff']) [data-qa='bk-file__content'
   display: none !important;
 }
 
-/* Hide menu, anchored beside the Files changed cog. The panel is position:fixed on the body so a re-rendered toolbar cannot clip it. */
+/* Hide menu, anchored in the top right of the summary bar. The panel is position:fixed on the body so a re-rendered toolbar cannot clip it. */
 
 .bbrd-menu-host {
   display: inline-flex;
   align-items: center;
   flex: none;
-  margin: 0 4px 0 0;
+  margin: 0;
 }
 
 button.bbrd-menu-button {
@@ -125,24 +125,26 @@ button.bbrd-menu-button:focus-visible {
 }
 
 .bbrd-filters-head {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--ds-text, #292a2e);
+}
+
+.bbrd-filters-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin: 0 0 2px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-  color: var(--ds-text-subtle, #505258);
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ds-border, #0b120e24);
 }
 
-.bbrd-hidden-actions {
-  display: inline-flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 8px;
-  min-width: 0;
-  text-align: right;
+.bbrd-filters-foot[hidden] {
+  display: none !important;
 }
 
 .bbrd-check {
@@ -282,25 +284,18 @@ a:has(> .bbrd-pill) {
   min-width: 0;
 }
 
-button.bbrd-stats-tab {
-  appearance: none;
-  display: inline-flex;
+.bbrd-stats-head {
+  display: flex;
   align-items: center;
-  height: 32px;
-  margin: 0;
-  padding: 0 10px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
 }
 
-button.bbrd-stats-tab[aria-selected='true'] {
-  color: var(--ds-link, #1868db);
-  box-shadow: inset 0 -2px 0 var(--ds-link, #1868db);
+.bbrd-stats-actions {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
 }
 
 .bbrd-stats .bbrd-add {
@@ -314,7 +309,8 @@ button.bbrd-stats-tab[aria-selected='true'] {
 }
 
 .bbrd-stats {
-  margin: 12px 0;
+  box-sizing: border-box;
+  margin: 8px 0;
   padding: 12px 16px;
   border: 1px solid var(--ds-border, #dfe1e6);
   border-radius: 8px;
@@ -324,7 +320,7 @@ button.bbrd-stats-tab[aria-selected='true'] {
 }
 
 .bbrd-stats h2 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 16px;
 }
 
@@ -381,11 +377,25 @@ button.bbrd-test-fold {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 2px 8px;
   text-align: left;
   color: var(--ds-text-subtle, #505258);
   background: var(--ds-background-neutral, #f1f2f4);
+  overflow-anchor: none;
+}
+
+.bbrd-test-title {
+  min-width: 0;
+}
+
+/* The chunk only scrolls sideways. A vertical flick over a test or summary bar should not rubber-band it. */
+.diff-chunk,
+.chunks-wrapper {
+  overscroll-behavior-y: none;
 }
 
 button.bbrd-test-fold {

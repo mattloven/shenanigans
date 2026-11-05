@@ -1,8 +1,10 @@
 import { commentLanguage } from '../core/comments.js';
-import { pathFromFileLink } from '../core/file-filter.js';
+import { formatCount, pathFromFileLink } from '../core/file-filter.js';
 import { summarizeFiles } from '../core/pr-stats.js';
 import { findTestSpans, isTestFile } from '../core/test-outline.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
+
+const TITLE = '💩 Betterer Bit Bucket';
 
 const FIGURES = [
   ['files', 'Files'],
@@ -11,103 +13,161 @@ const FIGURES = [
   ['tests', 'Tests'],
   ['projects', 'Project files'],
   ['generated', 'Generated'],
+  ['comments', 'Comments'],
 ];
 
-/** Adds one Stats tab after Commits in the pull request tab list and fills it from the diff. Safe to call on every scan. */
+/**
+ * Puts the summary above the file tree and the diff on Files changed.
+ * Line totals come from Bitbucket's own "Lines updated" figure.
+ * Safe to call on every scan.
+ */
 export function mountStatsTab(root) {
   const doc = root.nodeType === 9 ? root : root.ownerDocument ?? document;
-  const found = findPrTabBar(root);
-  if (!found) return;
-  const tab = ensureTab(doc, found.commits);
-  const panel = ensurePanel(doc, found.list);
+  doc.querySelector('.bbrd-stats-tab')?.remove();
+  const split = findSplit(root);
+  if (!split?.parentElement) {
+    doc.querySelector('.bbrd-stats')?.remove();
+    return;
+  }
+  const panel = ensurePanel(doc);
+  for (const extra of doc.querySelectorAll('.bbrd-stats')) {
+    if (extra !== panel) extra.remove();
+  }
+  if (split.previousElementSibling !== panel) split.parentElement.insertBefore(panel, split);
   const summary = summarizeFiles(filesIn(root));
+  const lines = readLinesUpdated(root);
+  summary.added = lines ? lines.added : null;
+  summary.removed = lines ? lines.removed : null;
+  const comments = readComments(root);
+  summary.comments = comments ? comments.unresolved : null;
+  summary.commentsResolved = comments ? comments.resolved : null;
   fillPanel(panel, summary);
-  if (tab.getAttribute('aria-selected') !== 'true') panel.hidden = true;
 }
 
 export function clearStats(root) {
   const doc = root.nodeType === 9 ? root : root.ownerDocument ?? document;
+  delete doc.__bbrdCommentRatio;
   doc.querySelector('.bbrd-stats-tab')?.remove();
   doc.querySelector('.bbrd-stats')?.remove();
 }
 
-/**
- * The pull request tab list is the horizontal row Overview / Files changed / Commits.
- * The repository sidebar also has a Commits link, and that one comes first in the page.
- * Only a tablist that contains all three pull request tabs qualifies.
- */
-function findPrTabBar(root) {
+/** The flex row whose children are the file tree and the diff preview. */
+function findSplit(root) {
   if (!root.querySelectorAll) return null;
-  for (const list of root.querySelectorAll('[role="tablist"]')) {
-    if (!(list instanceof HTMLElement)) continue;
-    if (list.closest('.bbrd-tabs, .bbrd-stats, .bbrd-filters')) continue;
-    const tabs = [...list.querySelectorAll('[role="tab"]')].filter((tab) => tab instanceof HTMLElement && !tab.classList.contains('bbrd-stats-tab'));
-    if (!tabs.some((tab) => tabKind(tab) === 'overview')) continue;
-    if (!tabs.some((tab) => tabKind(tab) === 'files')) continue;
-    const commits = tabs.find((tab) => tabKind(tab) === 'commits');
-    if (commits) return { list, commits };
+  const tree = root.querySelector('#file-tree');
+  const marker = tree || linesHeading(root);
+  if (!marker?.parentElement) return null;
+  let node = marker;
+  while (node.parentElement) {
+    const parent = node.parentElement;
+    if (parent === root || parent === root.body) break;
+    const children = [...parent.children].filter((child) => !child.classList?.contains('bbrd-stats'));
+    const treeChild = children.find((child) => child.contains(marker));
+    const previewChild = children.find((child) => child !== treeChild && child.querySelector('article[data-qa="branch-diff-file"]'));
+    if (treeChild && previewChild) return parent;
+    node = parent;
   }
   return null;
 }
 
-function tabKind(tab) {
-  const href = tab.getAttribute('href') || '';
-  const name = `${tab.getAttribute('aria-label') ?? ''} ${tab.textContent ?? ''}`.replace(/\s+/g, ' ').trim();
-  if (/\/pull-requests\/[^/]+\/commits\/?(?:$|\?|#)/.test(href) || /^commits/i.test(name)) return 'commits';
-  if (/\/pull-requests\/[^/]+\/diff\/?(?:$|\?|#)/.test(href) || /^files?\s+changed/i.test(name) || /^diff\b/i.test(name)) return 'files';
-  if (/\/pull-requests\/[^/]+\/overview\/?(?:$|\?|#)/.test(href) || /^overview\b/i.test(name)) return 'overview';
-  return '';
+function linesHeading(root) {
+  return [...root.querySelectorAll('h1, h2, h3, h4, h5, h6')].find((el) => {
+    if (el.closest('.bbrd-stats')) return false;
+    return (el.textContent ?? '').replace(/\s+/g, ' ').trim() === 'Lines updated';
+  });
 }
 
-function ensureTab(doc, commits) {
-  let tab = doc.querySelector('.bbrd-stats-tab');
-  if (!tab) {
-    tab = doc.createElement('button');
-    tab.type = 'button';
-    tab.className = 'bbrd-stats-tab';
-    tab.textContent = 'Stats';
-    tab.setAttribute('role', 'tab');
-    tab.setAttribute('aria-selected', 'false');
-    tab.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const open = tab.getAttribute('aria-selected') !== 'true';
-      tab.setAttribute('aria-selected', open ? 'true' : 'false');
-      const panel = doc.querySelector('.bbrd-stats');
-      if (panel) panel.hidden = !open;
-    });
+/**
+ * The comments menu shows "Unresolved Comments (7)" and, at the bottom, "Resolved Comments (0)".
+ * Bitbucket removes those headings when the menu closes, so the last pair is kept until the
+ * unresolved total on the button changes. File-row phrases are not the total.
+ */
+function readComments(root) {
+  if (!root.querySelectorAll) return null;
+  const doc = root.nodeType === 9 ? root : root.ownerDocument ?? document;
+  let unresolved = null;
+  let resolved = null;
+  for (const el of root.querySelectorAll('div, span, button, a, h1, h2, h3, h4, h5, h6')) {
+    if (!(el instanceof HTMLElement)) continue;
+    if (el.closest('.bbrd-stats, .bbrd-filters, #file-tree')) continue;
+    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text.length > 48) continue;
+    const unresolvedHeading = text.match(/^unresolved\s+comments\s*\(\s*([\d,]+)\s*\)$/i);
+    const resolvedHeading = text.match(/^resolved\s+comments\s*\(\s*([\d,]+)\s*\)$/i);
+    const button = text.match(/^comments\s*\(\s*([\d,]+)\s+unresolved\s*\)$/i);
+    if (unresolvedHeading) unresolved = countOf(unresolvedHeading[1]);
+    else if (resolvedHeading) resolved = countOf(resolvedHeading[1]);
+    else if (button && unresolved == null) unresolved = countOf(button[1]);
   }
-  if (commits.nextElementSibling !== tab) commits.insertAdjacentElement('afterend', tab);
-  return tab;
+  if (unresolved == null) return null;
+  if (resolved != null) doc.__bbrdCommentRatio = { unresolved, resolved };
+  else if (doc.__bbrdCommentRatio?.unresolved === unresolved) resolved = doc.__bbrdCommentRatio.resolved;
+  else delete doc.__bbrdCommentRatio;
+  return { unresolved, resolved };
 }
 
-function ensurePanel(doc, nav) {
+function countOf(raw) {
+  return Number(raw.replaceAll(',', ''));
+}
+
+/** Bitbucket prints the pull request totals next to the "Lines updated" label in the file tree. */
+function readLinesUpdated(root) {
+  const heading = linesHeading(root);
+  const row = heading?.parentElement?.parentElement;
+  const text = (row?.textContent ?? '').replace(/\s+/g, ' ');
+  const added = text.match(/\+\s*([\d,]+)/);
+  const removed = text.match(/[-\u2212]\s*([\d,]+)/);
+  if (!added || !removed) return null;
+  return {
+    added: Number(added[1].replaceAll(',', '')),
+    removed: Number(removed[1].replaceAll(',', '')),
+  };
+}
+
+function ensurePanel(doc) {
   let panel = doc.querySelector('.bbrd-stats');
   if (!panel) {
     panel = doc.createElement('section');
     panel.className = 'bbrd-stats';
-    panel.setAttribute('aria-label', 'Pull request stats');
-    panel.hidden = true;
+  }
+  panel.setAttribute('aria-label', 'Betterer Bit Bucket');
+  panel.hidden = false;
+  if (!panel.querySelector('.bbrd-stats-actions')) {
+    const head = doc.createElement('div');
+    head.className = 'bbrd-stats-head';
     const heading = doc.createElement('h2');
-    heading.textContent = 'Stats';
+    heading.textContent = TITLE;
+    const actions = doc.createElement('div');
+    actions.className = 'bbrd-stats-actions';
+    head.append(heading, actions);
     const lead = doc.createElement('p');
     lead.className = 'bbrd-stats-lead';
     const grid = doc.createElement('div');
     grid.className = 'bbrd-stats-grid';
-    for (const [key, label] of FIGURES) {
-      const figure = doc.createElement('div');
-      figure.className = 'bbrd-stats-figure';
-      figure.dataset.stat = key;
-      const value = doc.createElement('strong');
-      const caption = doc.createElement('span');
-      caption.textContent = label;
-      figure.append(value, caption);
-      grid.append(figure);
-    }
-    panel.append(heading, lead, grid);
+    for (const [key, label] of FIGURES) grid.append(figure(doc, key, label));
+    panel.replaceChildren(head, lead, grid);
   }
-  if (nav.nextElementSibling !== panel) nav.insertAdjacentElement('afterend', panel);
+  const grid = panel.querySelector('.bbrd-stats-grid');
+  if (grid) {
+    for (const [key, label] of FIGURES) {
+      if (panel.querySelector(`[data-stat="${key}"]`)) continue;
+      grid.append(figure(doc, key, label));
+    }
+  }
+  const heading = panel.querySelector('h2');
+  if (heading && heading.textContent !== TITLE) heading.textContent = TITLE;
   return panel;
+}
+
+function figure(doc, key, label) {
+  const item = doc.createElement('div');
+  item.className = 'bbrd-stats-figure';
+  item.dataset.stat = key;
+  const value = doc.createElement('strong');
+  const caption = doc.createElement('span');
+  caption.textContent = label;
+  item.append(value, caption);
+  return item;
 }
 
 function filesIn(root) {
@@ -117,14 +177,7 @@ function filesIn(root) {
   for (const link of root.querySelectorAll('a[href*="#chg-"]')) {
     const path = pathFromFileLink(link.getAttribute('href'));
     if (!path || byPath.has(path)) continue;
-    const row = link.closest('li') ?? link;
-    const text = row.textContent ?? '';
-    byPath.set(path, {
-      path,
-      added: sumPhrase(text, /(\d+)\s+lines?\s+added/gi),
-      removed: sumPhrase(text, /(\d+)\s+lines?\s+removed/gi),
-      tests: 0,
-    });
+    byPath.set(path, { path, added: 0, removed: 0, tests: 0 });
   }
   for (const article of findFileDiffs(root)) {
     const path = getFilePath(article);
@@ -150,12 +203,6 @@ function testsIn(article, path) {
   return findTestSpans(lines, language).length;
 }
 
-function sumPhrase(text, pattern) {
-  let total = 0;
-  for (const match of text.matchAll(pattern)) total += Number(match[1]);
-  return total;
-}
-
 function fillPanel(panel, summary) {
   const tests = summary.testFiles === 1 ? '1 file' : `${summary.testFiles} files`;
   const testWord = summary.tests === 1 ? '1 test' : `${summary.tests} tests`;
@@ -165,6 +212,7 @@ function fillPanel(panel, summary) {
     tests: `${tests} · ${testWord}`,
     projects: String(summary.projects),
     generated: String(summary.generated),
+    comments: commentLabel(summary),
   };
   for (const [key, value] of Object.entries(values)) {
     const slot = panel.querySelector(`[data-stat="${key}"] strong`);
@@ -176,7 +224,18 @@ function fillPanel(panel, summary) {
   if (lead) setLead(lead, summary, tests, testWord);
 }
 
+function commentLabel(summary) {
+  if (summary.comments == null) return '—';
+  if (summary.commentsResolved == null) return `${formatCount(summary.comments)} unresolved`;
+  const total = summary.commentsResolved + summary.comments;
+  return `${formatCount(summary.commentsResolved)} / ${formatCount(total)} resolved`;
+}
+
 function setLineCounts(slot, added, removed) {
+  if (added == null || removed == null) {
+    if (slot.textContent !== '—') slot.textContent = '—';
+    return;
+  }
   let add = slot.querySelector('.bbrd-add');
   let del = slot.querySelector('.bbrd-del');
   if (!add || !del) {
@@ -187,8 +246,8 @@ function setLineCounts(slot, added, removed) {
     del.className = 'bbrd-del';
     slot.append(add, slot.ownerDocument.createTextNode(' '), del);
   }
-  const addText = `+${added}`;
-  const delText = `−${removed}`;
+  const addText = `+${formatCount(added)}`;
+  const delText = `−${formatCount(removed)}`;
   if (add.textContent !== addText) add.textContent = addText;
   if (del.textContent !== delText) del.textContent = delText;
 }
@@ -210,10 +269,15 @@ function setLead(lead, summary, tests, testWord) {
     suffix.dataset.part = 'suffix';
     lead.append(prefix, add, lead.ownerDocument.createTextNode(' '), del, suffix);
   }
+  const commentText = summary.comments == null
+    ? ''
+    : summary.commentsResolved == null
+      ? `, ${formatCount(summary.comments)} unresolved ${summary.comments === 1 ? 'comment' : 'comments'}`
+      : `, ${formatCount(summary.commentsResolved)} / ${formatCount(summary.commentsResolved + summary.comments)} resolved`;
   const prefixText = `${summary.files} files changed, `;
-  const suffixText = `. ${summary.markdown} markdown, ${tests} with ${testWord}.`;
-  const addText = `+${summary.added}`;
-  const delText = `−${summary.removed}`;
+  const suffixText = `. ${summary.markdown} markdown, ${tests} with ${testWord}${commentText}.`;
+  const addText = summary.added == null ? '' : `+${formatCount(summary.added)}`;
+  const delText = summary.removed == null ? '' : `−${formatCount(summary.removed)}`;
   if (prefix.textContent !== prefixText) prefix.textContent = prefixText;
   if (suffix.textContent !== suffixText) suffix.textContent = suffixText;
   if (add.textContent !== addText) add.textContent = addText;
