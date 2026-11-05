@@ -25,6 +25,53 @@ export function parseExtensions(value) {
 /** A test project folder: the name ends in Tests, as in Foo.Tests or Foo.UnitTests. */
 export const TEST_FOLDER = /.*Tests$/i;
 
+/** Solution files and every MSBuild project type: .sln, .slnx, .csproj, .fsproj, .vbproj, .vcxproj, … */
+const PROJECT_FILE = /\.(?:[a-z0-9]*proj|projitems|sln|slnx|slnf)$/i;
+
+const GENERATED_NAMES = new Set([
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lock',
+  'bun.lockb',
+  'packages.lock.json',
+  'composer.lock',
+  'gemfile.lock',
+  'poetry.lock',
+  'cargo.lock',
+  'go.sum',
+  'podfile.lock',
+  'package.resolved',
+]);
+
+const GENERATED_FILE = /\.(?:min\.js|min\.css|designer\.cs|g\.cs|g\.i\.cs|generated\.cs)$/i;
+
+/** @typedef {'projects' | 'tests' | 'generated' | 'docs' | 'extensions' | 'pattern' | 'comments'} HideCategory */
+
+export const CATEGORY_ORDER = ['tests', 'projects', 'generated', 'docs', 'comments', 'extensions', 'pattern'];
+
+const CATEGORY_WORD = {
+  tests: ['test', 'tests'],
+  projects: ['project', 'projects'],
+  generated: ['generated', 'generated'],
+  docs: ['doc', 'docs'],
+  comments: ['comment-only', 'comment-only'],
+  extensions: ['extension', 'extensions'],
+  pattern: ['pattern', 'pattern'],
+};
+
+/** Short label for a chip beside a revealed file. */
+export const CATEGORY_LABEL = {
+  tests: 'Tests',
+  projects: 'Project',
+  generated: 'Generated',
+  docs: 'Docs',
+  comments: 'Comments',
+  extensions: 'Extension',
+  pattern: 'Pattern',
+};
+
 const MAX_PATTERN_LENGTH = 200;
 
 /**
@@ -47,21 +94,58 @@ function patternMatches(pattern, value) {
 }
 
 /**
+ * Which hide rule claims this path, or null when the file stays in the review.
+ * A path category wins over "comment-only", and the first matching category wins.
  * @param {string | null | undefined} path
- * @param {{ hideMarkdown?: boolean, hiddenExtensions?: string[], hideTestFolders?: boolean, hidePattern?: string }} settings
+ * @param {{ hideMarkdown?: boolean, hiddenExtensions?: string[], hideTestFolders?: boolean, hideProjects?: boolean, hideGenerated?: boolean, hideCommentFiles?: boolean, hidePattern?: string }} settings
+ * @param {Set<string> | undefined} commentOnly paths whose diff is only comments
+ * @returns {HideCategory | null}
  */
-export function isHiddenFile(path, settings) {
-  if (!path) return false;
-  const lower = path.toLowerCase();
-  const hiddenExtensions = settings.hiddenExtensions ?? [];
-  const extensions = settings.hideMarkdown ? [...hiddenExtensions, ...MARKDOWN_EXTENSIONS] : hiddenExtensions;
-  if (extensions.some((ext) => lower.endsWith(ext))) return true;
+export function fileCategory(path, settings, commentOnly) {
+  if (!path) return null;
   const segments = path.split(/[\\/]/).filter(Boolean);
+  const name = segments[segments.length - 1] ?? '';
+  const lower = path.toLowerCase();
   const folders = segments.slice(0, -1);
-  if (settings.hideTestFolders && folders.some((segment) => TEST_FOLDER.test(segment))) return true;
+  if (settings.hideProjects && PROJECT_FILE.test(name)) return 'projects';
+  if (settings.hideTestFolders && folders.some((segment) => TEST_FOLDER.test(segment))) return 'tests';
+  if (settings.hideGenerated && (GENERATED_NAMES.has(name.toLowerCase()) || GENERATED_FILE.test(name))) return 'generated';
+  if (settings.hideMarkdown && MARKDOWN_EXTENSIONS.some((ext) => lower.endsWith(ext))) return 'docs';
+  const hiddenExtensions = settings.hiddenExtensions ?? [];
+  if (hiddenExtensions.some((ext) => lower.endsWith(ext))) return 'extensions';
   const pattern = compileHidePattern(settings.hidePattern);
-  if (pattern && (patternMatches(pattern, path) || segments.some((segment) => patternMatches(pattern, segment)))) return true;
-  return false;
+  if (pattern && (patternMatches(pattern, path) || segments.some((segment) => patternMatches(pattern, segment)))) return 'pattern';
+  if (settings.hideCommentFiles && commentOnly?.has(path)) return 'comments';
+  return null;
+}
+
+/**
+ * @param {string | null | undefined} path
+ * @param {{ hideMarkdown?: boolean, hiddenExtensions?: string[], hideTestFolders?: boolean, hideProjects?: boolean, hideGenerated?: boolean, hideCommentFiles?: boolean, hidePattern?: string }} settings
+ * @param {Set<string> | undefined} [commentOnly]
+ */
+export function isHiddenFile(path, settings, commentOnly) {
+  return fileCategory(path, settings, commentOnly) !== null;
+}
+
+/**
+ * "6 hidden · 4 tests · 1 project +12 −3"
+ * @param {Partial<Record<HideCategory, number>>} counts
+ * @param {{ added?: number, removed?: number }} [lines]
+ */
+export function formatHideSummary(counts, lines) {
+  const total = CATEGORY_ORDER.reduce((sum, key) => sum + (counts[key] || 0), 0);
+  if (!total) return '';
+  const parts = [`${total} hidden`];
+  for (const key of CATEGORY_ORDER) {
+    const count = counts[key] || 0;
+    if (!count) continue;
+    const [one, many] = CATEGORY_WORD[key];
+    parts.push(`${count} ${count === 1 ? one : many}`);
+  }
+  let text = parts.join(' · ');
+  if (lines && (lines.added || lines.removed)) text += ` +${lines.added || 0} −${lines.removed || 0}`;
+  return text;
 }
 
 /**
