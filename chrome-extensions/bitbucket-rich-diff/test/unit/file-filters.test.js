@@ -5,13 +5,14 @@ import { DEFAULT_SETTINGS } from '../../src/core/settings.js';
 function installPage() {
   document.body.innerHTML = `
     <aside class="sidebar">
+      <div class="sidebar-head"><span data-qa="files-changed-count">2 files changed</span></div>
       <ul>
-        <li><a href="#chg-README.md">README.md</a></li>
-        <li><a href="#chg-src/App.cs">src/App.cs</a></li>
+        <li><a href="#chg-README.md">README.md <span class="stat">3 lines added, 1 line removed</span></a></li>
+        <li><a href="#chg-src/App.cs">src/App.cs <span class="stat">2 lines added</span></a></li>
       </ul>
     </aside>
     <div class="toolbar"><div class="right">
-      <span>0 of 2 files viewed</span>
+      <span data-qa="files-viewed-count">0 of 2 files viewed</span>
       <button type="button"><span>Global diff settings</span></button>
     </div></div>
     <article data-qa="branch-diff-file" aria-label="Diff of file README.md"></article>
@@ -83,20 +84,29 @@ describe('mountFileFilters', () => {
     expect(button.getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('hides matching files and keeps an in-progress pattern', () => {
+  it('hides matching files and keeps Show/Hide in the flyout, never the file tree', () => {
     const onChange = vi.fn();
     mountFileFilters(document, { ...DEFAULT_SETTINGS, hideMarkdown: true, hidePattern: '[' }, onChange);
 
     expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
     expect(document.querySelector('article[aria-label="Diff of file README.md"]').classList.contains('bbrd-file-hidden')).toBe(true);
     expect(document.querySelector('a[href="#chg-src/App.cs"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
-    expect(document.querySelector('.bbrd-hidden-count').textContent).toBe('1 hidden · 1 doc');
-    expect(document.querySelectorAll('.bbrd-hidden-bar')).toHaveLength(2);
-    document.querySelector('.bbrd-hidden-toggle').click();
+    expect(document.querySelector('.bbrd-hidden-count').textContent).toBe('1 hidden · 1 doc +3 −1');
+    expect(document.querySelectorAll('.bbrd-hidden-bar')).toHaveLength(0);
+    expect(document.querySelector('.sidebar .bbrd-hidden-toggle')).toBeNull();
+    expect(document.querySelector('.bbrd-filters .bbrd-hidden-toggle').hidden).toBe(false);
+    expect(document.querySelector('[data-qa="files-viewed-count"]').textContent).toBe('0 of 1 files viewed');
+    expect(document.querySelector('[data-qa="files-changed-count"]').textContent).toBe('1 files changed');
+
+    document.querySelector('.bbrd-filters .bbrd-hidden-toggle').click();
     expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
     expect(document.querySelector('a[href="#chg-README.md"]').closest('li').querySelector('.bbrd-cat').textContent).toBe('Docs');
-    document.querySelector('.bbrd-hidden-toggle').click();
+    expect(document.querySelector('[data-qa="files-viewed-count"]').textContent).toBe('0 of 2 files viewed');
+    expect(document.querySelector('[data-qa="files-changed-count"]').textContent).toBe('2 files changed');
+
+    document.querySelector('.bbrd-filters .bbrd-hidden-toggle').click();
     expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
+    expect(document.querySelector('a[href="#chg-README.md"]').closest('li').querySelector('.bbrd-cat')).toBeNull();
     expect(document.querySelector('[data-filter="hidePattern"]').getAttribute('aria-invalid')).toBe('true');
 
     document.querySelector('.bbrd-menu-button').click();
@@ -139,17 +149,37 @@ describe('mountFileFilters', () => {
     expect(folder().querySelector('.bbrd-hidden-pill')).toBeNull();
   });
 
-  it('puts the hidden-file bar after the whole file tree', () => {
+  it('does not put a summary bar in the file tree, and a second mount does not duplicate the flyout, pill, or chip', () => {
     document.body.innerHTML = `
-      <ul id="tree">
-        <li><a href="#chg-README.md">README.md</a></li>
-        <li>
-          <button type="button"><span role="img" aria-label="Directory"></span><span>src</span></button>
-          <ul><li><a href="#chg-src/App.cs">App.cs</a></li></ul>
-        </li>
-      </ul>
-      <button type="button"><span>Global diff settings</span></button>`;
-    mountFileFilters(document, { ...DEFAULT_SETTINGS, hideMarkdown: true }, vi.fn());
-    expect(document.querySelector('.bbrd-hidden-bar[data-place="list"]').previousElementSibling.id).toBe('tree');
+      <aside class="sidebar">
+        <span data-qa="files-changed-count">2 files changed</span>
+        <ul role="list" id="tree">
+          <li>
+            <button type="button"><span role="img" aria-label="Directory"></span><span>Payment.Tests</span></button>
+            <ul role="list"><li><a href="#chg-src/Payment.Tests/ChargeTests.cs">ChargeTests.cs <span class="stat">4 lines added</span></a></li></ul>
+          </li>
+          <li><a href="#chg-src/App.cs">App.cs</a></li>
+        </ul>
+      </aside>
+      <span data-qa="files-viewed-count">0 of 2 files viewed</span>
+      <button type="button"><span>Global diff settings</span></button>
+      <article data-qa="branch-diff-file" aria-label="Diff of file src/Payment.Tests/ChargeTests.cs"></article>
+      <article data-qa="branch-diff-file" aria-label="Diff of file src/App.cs"></article>`;
+    const settings = { ...DEFAULT_SETTINGS, hideTestFolders: true };
+    mountFileFilters(document, settings, vi.fn());
+    expect(document.querySelector('.sidebar .bbrd-hidden-bar')).toBeNull();
+    expect(document.querySelectorAll('.bbrd-hidden-bar')).toHaveLength(0);
+    expect(document.querySelector('.bbrd-filters .bbrd-hidden-count').textContent).toMatch(/1 hidden · 1 test/);
+    expect(document.querySelector('.bbrd-filters .bbrd-hidden-toggle').hidden).toBe(false);
+
+    document.querySelector('.bbrd-filters .bbrd-hidden-toggle').click();
+    expect(document.querySelector('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').closest('li').querySelectorAll('.bbrd-cat')).toHaveLength(1);
+    mountFileFilters(document, settings, vi.fn());
+    mountFileFilters(document, settings, vi.fn());
+    expect(document.querySelectorAll('.bbrd-filters')).toHaveLength(1);
+    expect(document.querySelectorAll('.bbrd-menu-host')).toHaveLength(1);
+    expect(document.querySelectorAll('#tree .bbrd-hidden-pill')).toHaveLength(1);
+    expect(document.querySelector('a[href="#chg-src/Payment.Tests/ChargeTests.cs"]').closest('li').querySelectorAll('.bbrd-cat')).toHaveLength(1);
+    expect(document.querySelector('[data-qa="files-viewed-count"]').textContent).toBe('0 of 2 files viewed');
   });
 });
