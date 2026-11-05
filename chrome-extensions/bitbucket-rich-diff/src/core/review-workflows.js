@@ -40,7 +40,7 @@ const INFRA_BODY = [
   String.raw`\.(?:tf|tfvars|hcl|cake|ya?ml|ini|toml|config|props|targets|dockerignore|[a-z0-9]*proj|projitems|sln|slnx|slnf|env)$`,
   String.raw`(?:^|/)(?:dockerfile|makefile|gemfile|rakefile|procfile|jenkinsfile|nuget\.config|global\.json|codeowners)`,
   String.raw`(?:^|/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|packages\.lock\.json|composer\.lock|gemfile\.lock|poetry\.lock|cargo\.lock|go\.sum|podfile\.lock|package\.resolved)$`,
-  String.raw`(?:^/)\.(?:gitignore|gitattributes|editorconfig|npmrc|nvmrc|env)`,
+  String.raw`(?:^|/)\.(?:gitignore|gitattributes|editorconfig|npmrc|nvmrc|env)`,
   String.raw`(?:^|/)appsettings(?:\.[^/]+)?\.json$`,
   String.raw`(?:^|/)launchsettings\.json$`,
   String.raw`(?:^|/)(?:tsconfig|jsconfig|package|composer)[^/]*\.json$`,
