@@ -368,7 +368,7 @@ function syncChip(item, category) {
 
 /**
  * While files are hidden, show actual (real minus hidden) beside the original Bitbucket total.
- * "0 of 14 files viewed" becomes "0 of 12 viewed \u00b7 14 files". "14 files changed" becomes
+ * "0 of 14 files viewed" becomes "0 of 12 viewed · 14 files". "14 files changed" becomes
  * "12 of 14 files changed". The original string is stored the first time we see the node and
  * restored exactly when nothing is hidden. A later scan never treats rewritten text as the source.
  * @param {ParentNode} root
@@ -383,7 +383,7 @@ function syncFileCounters(root, hiddenCount) {
       const actual = Math.max(0, total - hiddenCount);
       const nextViewed = viewedVisible == null ? Math.min(viewed, actual) : Math.min(viewedVisible, actual);
       const word = total === 1 ? 'file' : 'files';
-      return `${nextViewed} of ${actual} viewed \u00b7 ${total} ${word}`;
+      return `${nextViewed} of ${actual} viewed · ${total} ${word}`;
     });
     rewriteCounter(node, CHANGED_COUNTER, ORIGINAL_CHANGED, exclude, hiddenCount, (_count, total, source) => {
       const actual = Math.max(0, total - hiddenCount);
