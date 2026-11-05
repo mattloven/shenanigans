@@ -103,4 +103,35 @@ describe('mock pull request', () => {
   });
 
   it('hides deletions and folds unchanged sections, and persists the toggles', async () => {
- 
+    const readme = article('README.md');
+    await readme.getByLabel('Show deletions').uncheck();
+    assert.equal(await readme.locator('del.bbrd-del:visible, .bbrd-blk--del:visible').count(), 0);
+    assert.equal(await readme.locator('.counter').textContent(), '11 changes');
+    await readme.getByLabel('Only changes').check();
+    const fold = readme.locator('.bbrd-fold-toggle:visible');
+    assert.equal(await fold.textContent(), 'Show 7 unchanged sections');
+    assert.equal(await article('package.json').getByLabel('Only changes').isChecked(), true, 'applies to other files');
+    await shot('mock-readme-final-text-only-changes', readme);
+    await fold.click();
+    assert.equal(await readme.locator('.bbrd-fold-toggle:visible').count(), 0);
+
+    await page.reload();
+    await article('README.md').locator('.markdown-body').waitFor();
+    assert.equal(await article('README.md').getByLabel('Show deletions').isChecked(), false, 'persisted');
+    await article('README.md').getByLabel('Show deletions').check();
+    await article('README.md').getByLabel('Only changes').uncheck();
+  });
+
+  it('switches to Preview and back to the standard Diff without collapsing the file', async () => {
+    const readme = article('README.md');
+    await readme.locator('.bbrd-tab[data-view="preview"]').click();
+    assert.deepEqual(await readme.locator('.markdown-body h1').allTextContents(), ['Payments Service', 'Payments Service']);
+    assert.equal(await readme.locator('.markdown-body del, .markdown-body ins').count(), 0);
+    await readme.locator('.bbrd-tab[data-view="diff"]').click();
+    assert.equal(await readme.locator('[data-qa="bk-file__content"]').isVisible(), true);
+    assert.equal(await readme.locator('.bbrd-host').isVisible(), false);
+    assert.equal(await readme.evaluate((a) => a.classList.contains('collapsed')), false);
+    await readme.locator('.bbrd-tab[data-view="changes"]').click();
+  });
+
+  it('previews old and new side by side with aligned sections, or one at a time', a
