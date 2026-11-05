@@ -17,6 +17,7 @@ import { parseExtensions } from './file-filter.js';
  * @property {boolean} hideGenerated        hide lockfiles, minified files and generated source
  * @property {boolean} hideCommentFiles     hide files whose entire diff is comments
  * @property {string} hidePattern           regular expression matched against the path, each folder, and the file name
+ * @property {boolean} hideReviewGroups    hide the Review path section under the summary
  */
 
 /** @typedef {'old' | 'new' | 'split'} PreviewLayout */
@@ -38,6 +39,7 @@ export const DEFAULT_SETTINGS = {
   hideGenerated: false,
   hideCommentFiles: false,
   hidePattern: '',
+  hideReviewGroups: false,
 };
 
 export const PREVIEW_LAYOUTS = ['old', 'new', 'split'];
@@ -68,6 +70,7 @@ export function normalizeSettings(stored) {
     hideGenerated: typeof s.hideGenerated === 'boolean' ? s.hideGenerated : DEFAULT_SETTINGS.hideGenerated,
     hideCommentFiles: typeof s.hideCommentFiles === 'boolean' ? s.hideCommentFiles : DEFAULT_SETTINGS.hideCommentFiles,
     hidePattern: typeof s.hidePattern === 'string' ? s.hidePattern.slice(0, 200) : DEFAULT_SETTINGS.hidePattern,
+    hideReviewGroups: typeof s.hideReviewGroups === 'boolean' ? s.hideReviewGroups : DEFAULT_SETTINGS.hideReviewGroups,
   };
 }
 

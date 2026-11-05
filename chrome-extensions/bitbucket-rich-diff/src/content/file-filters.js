@@ -1,7 +1,10 @@
 import { CATEGORY_LABEL, CATEGORY_ORDER, compileHidePattern, fileCategory, formatCount, formatHideSummary, groupCountText, isHiddenFolder, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
+import { activeReviewGroup } from './review-groups.js';
 
 const MENU_LABEL = 'Hide files and comments';
+/** File rules a review group replaces. Comment checkboxes are not in this list. */
+const FILE_FILTERS = ['hideMarkdown', 'hideTestFolders', 'hideProjects', 'hideGenerated', 'hideCommentFiles', 'hiddenExtensions', 'hidePattern'];
 const VIEWED_COUNTER = /^(\d[\d,]*)\s+of\s+(\d[\d,]*)\s+files?\s+viewed$/i;
 const CHANGED_COUNTER = /^(\d[\d,]*)\s+files?\s+changed$/i;
 const ORIGINAL_VIEWED = 'bbrdViewedOriginal';
@@ -78,6 +81,7 @@ function ensurePanel(doc, onChange) {
     parkSummary(panel);
   }
   shapeCommentOptions(panel);
+  shapeReviewOption(panel);
   changeHandlers.set(panel, onChange);
   return panel;
 }
@@ -151,6 +155,7 @@ function buildPanel() {
   panel.hidden = true;
   panel.innerHTML = `
     <div class="bbrd-filters-head">Hide</div>
+    <label class="bbrd-check" title="Hides the Review path section under the summary."><input type="checkbox" data-filter="hideReviewGroups" /> Review path</label>
     <label class="bbrd-check" title="Also hides .markdown and the other markdown extensions"><input type="checkbox" data-filter="hideMarkdown" /> Markdown files</label>
     <label class="bbrd-check" title="Line comments and block comments"><input type="checkbox" data-filter="hideCodeComments" /> Code comments</label>
     <label class="bbrd-check" title="C# documentation comments and JSDoc blocks. Removes them, with no section to open."><input type="checkbox" data-filter="hideSummaryComments" /> Summary comments</label>
@@ -257,7 +262,20 @@ function placeMenu(host, panel) {
   panel.style.top = `${Math.round(top)}px`;
 }
 
+/** Adds the Review path checkbox on a menu built before it existed. */
+function shapeReviewOption(panel) {
+  if (panel.querySelector('[data-filter="hideReviewGroups"]')) return;
+  const head = panel.querySelector('.bbrd-filters-head');
+  if (!head) return;
+  const label = panel.ownerDocument.createElement('label');
+  label.className = 'bbrd-check';
+  label.title = 'Hides the Review path section under the summary.';
+  label.innerHTML = '<input type="checkbox" data-filter="hideReviewGroups" /> Review path';
+  head.insertAdjacentElement('afterend', label);
+}
+
 function syncPanel(panel, settings) {
+  const review = panel.querySelector('[data-filter="hideReviewGroups"]');
   const markdown = panel.querySelector('[data-filter="hideMarkdown"]');
   const code = panel.querySelector('[data-filter="hideCodeComments"]');
   const summary = panel.querySelector('[data-filter="hideSummaryComments"]');
@@ -266,6 +284,7 @@ function syncPanel(panel, settings) {
   const projects = panel.querySelector('[data-filter="hideProjects"]');
   const generated = panel.querySelector('[data-filter="hideGenerated"]');
   const commentFiles = panel.querySelector('[data-filter="hideCommentFiles"]');
+  if (review && review.checked !== !!settings.hideReviewGroups) review.checked = !!settings.hideReviewGroups;
   if (markdown.checked !== settings.hideMarkdown) markdown.checked = settings.hideMarkdown;
   if (code.checked !== settings.hideCodeComments) code.checked = settings.hideCodeComments;
   if (summary.checked !== settings.hideSummaryComments) summary.checked = settings.hideSummaryComments;
@@ -285,6 +304,17 @@ function syncPanel(panel, settings) {
   if (document.activeElement !== pattern && pattern.value !== settings.hidePattern) pattern.value = settings.hidePattern;
   const invalid = settings.hidePattern.trim() !== '' && !compileHidePattern(settings.hidePattern);
   pattern.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+  pauseFileFilters(panel, Boolean(activeReviewGroup()));
+}
+
+/** A selected review group is the only file filter. The checkboxes stay put and come back when the group is cleared. */
+function pauseFileFilters(panel, paused) {
+  for (const key of FILE_FILTERS) {
+    const input = panel.querySelector(`[data-filter="${key}"]`);
+    if (!(input instanceof HTMLInputElement)) continue;
+    input.disabled = paused;
+    input.closest('label')?.classList.toggle('bbrd-check-disabled', paused);
+  }
 }
 
 /** Hide and collapse are alternatives. Hiding summary comments turns collapse off and leaves it unavailable. */
@@ -302,26 +332,28 @@ function applyHidden(root, settings, commentOnly) {
   for (const key of CATEGORY_ORDER) counts[key] = 0;
   const lines = { added: 0, removed: 0 };
   const seen = new Set();
+  const lens = activeReviewGroup();
   for (const link of root.querySelectorAll('a[href*="#chg-"]')) {
     const path = pathFromFileLink(link.getAttribute('href'));
     if (!path || seen.has(path)) continue;
     seen.add(path);
     const item = link.closest('li') ?? link;
     const category = fileCategory(path, settings, commentOnly);
-    if (category) {
+    if (category && !lens) {
       counts[category] += 1;
       const stat = readStat(item);
       lines.added += stat.added;
       lines.removed += stat.removed;
     }
-    setHidden(item, Boolean(category) && !revealed);
-    syncChip(item, revealed && category ? category : null);
+    setHidden(item, Boolean(category) && !revealed && !lens);
+    syncChip(item, revealed && category && !lens ? category : null);
   }
   for (const article of findFileDiffs(root)) {
-    const category = fileCategory(getFilePath(article), settings, commentOnly);
-    setHidden(article, Boolean(category) && !revealed);
+    const path = getFilePath(article);
+    const category = fileCategory(path, settings, commentOnly);
+    setHidden(article, Boolean(category) && !revealed && !lens);
   }
-  markHiddenFolders(root, settings);
+  markHiddenFolders(root, settings, lens);
   const hiddenCount = CATEGORY_ORDER.reduce((sum, key) => sum + (counts[key] || 0), 0);
   const summary = formatHideSummary(counts, lines);
   syncFlyoutSummary(root, summary);
@@ -463,14 +495,14 @@ function setHidden(element, hide) {
   if (element.classList.contains('bbrd-file-hidden') !== hide) element.classList.toggle('bbrd-file-hidden', hide);
 }
 
-function markHiddenFolders(root, settings) {
+function markHiddenFolders(root, settings, lens) {
   if (!root.querySelectorAll) return;
   for (const button of root.querySelectorAll('button')) {
     if (!(button instanceof HTMLButtonElement)) continue;
     if (!button.querySelector('[aria-label="Directory"]')) continue;
     const list = button.closest('ul[role="list"]');
     if (!list?.querySelector('a[href*="#chg-"]')) continue;
-    syncFolderPill(button, isHiddenFolder(directoryPath(button), settings));
+    syncFolderPill(button, !lens && isHiddenFolder(directoryPath(button), settings));
   }
 }
 
