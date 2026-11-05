@@ -1201,4 +1201,89 @@ button.bbrd-test-fold {
 
 .bbrd-pattern-panel {
   display: flex;
-  flex-direction: co
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--ds-border, #091e4224);
+  border-radius: 8px;
+  background: var(--ds-background-neutral, #f7f8f9);
+}
+
+.bbrd-pattern-meta {
+  margin: 0;
+  color: var(--ds-text-subtlest, #6b6e76);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.bbrd-pattern-field .bbrd-pattern {
+  max-width: none;
+}
+
+.bbrd-workflow-help {
+  margin: 0;
+  color: var(--ds-text-subtlest, #6b6e76);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.bbrd-workflow-help summary {
+  width: fit-content;
+  color: var(--ds-link, #0c66e4);
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+.bbrd-workflow-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.bbrd-workflow-help summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 1em;
+  color: var(--ds-text-subtlest, #6b6e76);
+}
+
+.bbrd-workflow-help[open] summary::before {
+  content: '▾';
+}
+
+.bbrd-workflow-help p {
+  margin: 8px 0 0;
+}
+
+@media (max-width: 640px) {
+  .bbrd-workflow-show-field {
+    max-width: none;
+  }
+
+  .bbrd-workflow-toolbar,
+  .bbrd-workflow-identity,
+  .bbrd-group-edit-main,
+  .bbrd-group-edit-filter-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .bbrd-workflow-actions {
+    justify-content: flex-start;
+  }
+
+  .bbrd-group-edit-match {
+    padding-left: 0;
+  }
+
+  .bbrd-group-edit-main {
+    align-items: start;
+  }
+
+  .bbrd-group-edit-order {
+    grid-column: 1;
+  }
+}
+
+.bbrd-hide-comment {
+  display: none !important;
+}
