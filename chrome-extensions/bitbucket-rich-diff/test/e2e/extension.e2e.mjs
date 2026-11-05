@@ -342,4 +342,102 @@ describe('mock pull request', () => {
     assert.equal(await page.locator('[data-qa="files-changed-count"]').textContent(), '12 of 14 files changed');
 
     await openHideMenu();
-    await panel.get
+    await panel.getByLabel('Test projects').uncheck();
+    assert.equal(await page.locator('[data-qa="files-viewed-count"]').textContent(), '0 of 14 files viewed');
+  });
+
+  it('hides code comments and summary comments in JavaScript and C# diffs', async () => {
+    const panel = await openHideMenu();
+    const js = article('src/checkout.js');
+    const cs = article('src/Payment.cs');
+    const shown = (root, text) => root.locator('[data-key="code-line"]:visible', { hasText: text }).count();
+    assert.equal(await shown(js, 'Reject empty amounts'), 1);
+    assert.equal(await shown(js, '@param'), 2);
+
+    await panel.getByLabel('Code comments').check();
+    assert.equal(await shown(js, 'Reject empty amounts'), 0);
+    const commentFold = js.locator('.bbrd-comment-fold').first();
+    assert.match(await commentFold.textContent(), /comment line/);
+    await commentFold.click();
+    assert.equal(await shown(js, 'Reject empty amounts'), 1);
+    await commentFold.click();
+    assert.equal(await shown(js, 'Reject empty amounts'), 0);
+    assert.equal(await js.locator('.bbrd-hide-comment:visible', { hasText: 'trailing note' }).count(), 0);
+    assert.ok((await js.locator('.bbrd-hide-comment', { hasText: 'trailing note' }).count()) >= 1);
+    assert.ok((await shown(js, 'gateway.capture')) >= 1);
+    assert.equal(await shown(js, 'https?:'), 1, 'slashes inside a regex stay');
+    assert.equal(await shown(js, '@param'), 2, 'summary comments stay until asked');
+    assert.equal(await shown(cs, 'Reject empty amounts'), 0);
+    assert.equal(await shown(cs, '<summary>'), 2);
+
+    await openHideMenu();
+    await panel.getByLabel('Summary comments').check();
+    assert.equal(await shown(js, '@param'), 0);
+    assert.equal(await shown(cs, '<summary>'), 0);
+    assert.equal(await shown(cs, 'public string Charge'), 1);
+    assert.equal(await shown(cs, 'http://gateway'), 1, 'comment markers inside strings stay');
+    await shot('mock-comments-hidden', cs);
+
+    await panel.getByLabel('Code comments').uncheck();
+    await panel.getByLabel('Summary comments').uncheck();
+    assert.equal(await shown(js, '@param'), 2);
+    assert.equal(await shown(cs, '<summary>'), 2);
+  });
+
+  it('collapses a test file to one row per test', async () => {
+    const tests = article('src/Payment.Tests/ChargeTests.cs');
+    const folds = tests.locator('.bbrd-test-fold');
+    assert.equal(await folds.count(), 2);
+    assert.match(await folds.nth(0).locator('.bbrd-test-title').textContent(), /Charge rejects empty/);
+    assert.equal(await tests.locator('[data-key="code-line"]:visible', { hasText: 'Assert.Null' }).count(), 0);
+    await folds.nth(0).click();
+    assert.equal(await tests.locator('[data-key="code-line"]:visible', { hasText: 'Assert.Null' }).count(), 1);
+    await folds.nth(0).click();
+  });
+
+  it('shows the summary above the file tree and the diff', async () => {
+    assert.equal(await page.locator('.bbrd-stats-tab').count(), 0);
+    const panel = page.getByRole('region', { name: 'Betterer Bit Bucket' });
+    assert.equal(await panel.locator('h2').textContent(), '💩 Betterer Bit Bucket');
+    assert.equal(await page.locator('.page').evaluate((el) => el.previousElementSibling?.classList.contains('bbrd-stats')), true);
+    assert.equal(await page.locator('#file-tree .bbrd-stats').count(), 0);
+    assert.equal(await panel.locator('.bbrd-stats-actions .bbrd-menu-button').count(), 1);
+    const figure = (name) => panel.locator(`[data-stat="${name}"] strong`).textContent();
+    assert.equal(await figure('files'), '14');
+    assert.equal(await panel.locator('[data-stat="lines"] .bbrd-add').textContent(), '+1,404');
+    assert.equal(await panel.locator('[data-stat="lines"] .bbrd-del').textContent(), '−82');
+    assert.match(await page.locator('.lines-updated').innerText(), /\+1,404/);
+    assert.match(await page.locator('.lines-updated').innerText(), /-82/);
+    assert.equal(await figure('markdown'), '3');
+    assert.equal(await figure('tests'), '2 files · 2 tests');
+    assert.equal(await figure('projects'), '2');
+    assert.equal(await figure('generated'), '1');
+    assert.equal(await figure('comments'), '1 / 4 resolved');
+    assert.equal(await panel.isVisible(), true);
+  });
+
+  it('re-attaches tabs when Bitbucket re-renders a file header', async () => {
+    await page.evaluate(() => window.__rerenderHeader(0));
+    await article('README.md').locator('.bbrd-tabs').waitFor();
+    assert.equal(await article('README.md').locator('.bbrd-tabs').count(), 1);
+  });
+});
+
+describe('real Bitbucket Cloud pull request', { skip: process.env.E2E_SKIP_REAL === '1' }, () => {
+  it('injects tabs and renders rich views on bitbucket.org', async () => {
+    await page.goto(REAL_PR_URL, { waitUntil: 'domcontentloaded' });
+    const readme = article('README.md');
+    await readme.locator('.bbrd-tabs').waitFor({ timeout: 45000 });
+    await readme.locator('.markdown-body').waitFor({ timeout: 20000 });
+    assert.equal(await readme.locator('.bbrd-blk--ins h2').first().textContent(), '⚠️ Warning');
+    assert.equal(await readme.locator('[data-qa="bk-file__content"]').isVisible(), false);
+
+    const pkg = article('package.json');
+    await pkg.locator('.jd-summary').waitFor();
+    assert.deepEqual(await pkg.locator('.jd-sum-path').allTextContents(), ['version', 'scripts.test']);
+    await shot('real-package-json-rich-diff', pkg);
+
+    await readme.locator('.bbrd-tab[data-view="diff"]').click();
+    assert.equal(await readme.locator('[data-qa="bk-file__content"]').isVisible(), true);
+  });
+});
