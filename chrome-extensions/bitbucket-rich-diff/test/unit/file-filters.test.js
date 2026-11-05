@@ -46,6 +46,8 @@ describe('mountFileFilters', () => {
     expect(document.querySelector('.bbrd-comment-explain')).toBeNull();
     expect(document.querySelector('[data-filter="collapseSummaryComments"]').closest('label').textContent).toMatch(/Collapse summary comments/);
     expect(document.querySelector('[data-filter="hideReviewGroups"]').closest('label').textContent).toMatch(/Review path/);
+    expect(document.querySelector('[data-workflow]').value).toBe('dotnet');
+    expect(document.querySelector('.bbrd-workflow-open').textContent).toBe('Edit groups');
     expect(document.querySelector('.bbrd-filters').lastElementChild.classList.contains('bbrd-filters-foot')).toBe(true);
     expect(document.querySelector('.bbrd-filters-foot').hidden).toBe(true);
     expect(document.querySelector('.bbrd-stats-actions').contains(document.querySelector('.bbrd-menu-host'))).toBe(true);
