@@ -28,7 +28,8 @@ h1 {
   margin: 0;
 }
 
-.lede {
+.lede,
+.hint {
   color: #505258;
   margin: 4px 0 14px;
   font-size: 12px;
@@ -75,6 +76,16 @@ legend {
   border-color: #1868db;
 }
 
+.row.is-disabled {
+  color: #a5adba;
+}
+
+.row input[type='checkbox']:disabled {
+  border-color: #dfe1e6;
+  background: #f1f2f4;
+  cursor: default;
+}
+
 .row input[type='checkbox']:checked::after {
   content: '';
   width: 8px;
@@ -115,6 +126,309 @@ input[type='text']:focus {
   font-size: 12px;
 }
 
+.bbrd-workflow-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bbrd-workflow-show {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bbrd-workflow-show-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bbrd-workflow-show-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+}
+
+.bbrd-workflow-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #091e4224;
+  border-radius: 8px;
+  background: #f7f8f9;
+}
+
+.bbrd-workflow-identity {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.bbrd-workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bbrd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bbrd-field-label {
+  color: #505258;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.bbrd-field-error {
+  color: #ae2e24;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.bbrd-workflow-editor input[type='text'],
+.bbrd-workflow-editor select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  padding: 0 10px;
+  border: 2px solid #8c8f97;
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.bbrd-workflow-editor input[type='text']:focus,
+.bbrd-workflow-editor select:focus {
+  border-color: #4688ec;
+  outline: none;
+}
+
+.bbrd-workflow-editor input.bbrd-pattern {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.bbrd-workflow-editor input[aria-invalid='true'] {
+  border-color: #e2483d;
+}
+
+.bbrd-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.bbrd-btn:disabled {
+  color: #a5adba;
+  cursor: default;
+}
+
+.bbrd-btn-subtle {
+  border-color: #091e4224;
+  background: #f1f2f4;
+}
+
+.bbrd-btn-secondary {
+  border-color: #091e4224;
+  background: #fff;
+}
+
+.bbrd-btn-link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  color: #0c66e4;
+  font-size: 12px;
+}
+
+.bbrd-btn-icon {
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: #505258;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bbrd-btn-danger-text {
+  color: #ae2e24;
+}
+
+.bbrd-group-edits-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bbrd-group-edits-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+}
+
+.bbrd-workflow-hint {
+  margin: 0;
+  color: #6b6e76;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.bbrd-group-edits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bbrd-group-edits-foot {
+  display: flex;
+}
+
+.bbrd-group-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #091e4224;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.bbrd-group-edit-main {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.bbrd-group-edit-order {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.bbrd-group-edit-number {
+  display: inline-grid;
+  place-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #f1f2f4;
+  color: #505258;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bbrd-group-edit-order .bbrd-btn-icon {
+  width: 24px;
+  min-height: 20px;
+  font-size: 10px;
+}
+
+.bbrd-color-swatch {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border: 1px solid #091e4224;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.bbrd-workflow-editor input[type='color'] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.bbrd-group-edit-match {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bbrd-group-edit-filter-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.bbrd-pattern-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #091e4224;
+  border-radius: 8px;
+  background: #f7f8f9;
+}
+
+.bbrd-pattern-meta {
+  margin: 0;
+  color: #6b6e76;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.bbrd-workflow-help {
+  margin: 0;
+  color: #6b6e76;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.bbrd-workflow-help summary {
+  width: fit-content;
+  color: #0c66e4;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+.bbrd-workflow-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.bbrd-workflow-help p {
+  margin: 8px 0 0;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #cecfd2;
@@ -122,8 +436,13 @@ input[type='text']:focus {
   }
 
   .lede,
+  .hint,
   legend,
-  .status {
+  .status,
+  .bbrd-workflow-hint,
+  .bbrd-pattern-meta,
+  .bbrd-workflow-help,
+  .bbrd-field-label {
     color: #a9abaf;
   }
 
@@ -133,9 +452,36 @@ input[type='text']:focus {
 
   .row input[type='checkbox'],
   select,
-  input[type='text'] {
+  input[type='text'],
+  .bbrd-workflow-editor input[type='text'],
+  .bbrd-workflow-editor select,
+  .bbrd-group-edit,
+  .bbrd-btn-secondary {
     background: #1f1f21;
     border-color: #7e8188;
     color: inherit;
+  }
+
+  .bbrd-workflow-toolbar,
+  .bbrd-pattern-panel,
+  .bbrd-group-edit-number,
+  .bbrd-btn-subtle {
+    background: #2c2c2e;
+    border-color: #ffffff24;
+  }
+
+  .bbrd-color-swatch {
+    background: #1f1f21;
+    border-color: #ffffff24;
+  }
+
+  .bbrd-btn-link,
+  .bbrd-workflow-help summary {
+    color: #579dff;
+  }
+
+  .bbrd-field-error,
+  .bbrd-btn-danger-text {
+    color: #f87462;
   }
 }

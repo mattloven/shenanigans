@@ -44,6 +44,8 @@ describe('updateCommentMasks', () => {
     expect(rows[2].querySelector('.bbrd-hide-comment').textContent).toBe('// trailing');
     expect(rows[2].textContent.startsWith('  const a = 1; ')).toBe(true);
     expect(rows[4].classList.contains('bbrd-hide-line')).toBe(false);
+    const fold = el.querySelector('.bbrd-comment-fold');
+    expect(fold.querySelector('.bbrd-fold-pill').textContent).toBe('Comments - 1 line');
 
     updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: true });
     expect(el.querySelector('[data-key="code-line"]:last-child').classList.contains('bbrd-hide-line')).toBe(true);
@@ -51,6 +53,22 @@ describe('updateCommentMasks', () => {
     updateCommentMasks(document, { hideCodeComments: false, hideSummaryComments: false });
     expect(el.querySelector('.bbrd-hide-line, .bbrd-hide-comment')).toBeNull();
     expect(el.querySelector('[data-line-type="+"]').textContent).toContain('// trailing');
+    el.remove();
+  });
+
+  it('folds summary comments only when collapse is on, and hides them with no bar otherwise', () => {
+    const el = article('src/Payment.cs', [
+      ['+', '    /// <summary>Docs.</summary>'],
+      ['+', '    var a = 1;'],
+    ]);
+    updateCommentMasks(document, { hideCodeComments: false, hideSummaryComments: false, collapseSummaryComments: true });
+    expect(el.querySelector('.bbrd-fold-pill').textContent).toBe('Comments - 1 line');
+    expect(el.querySelector('[data-key="code-line"]').classList.contains('bbrd-fold-line')).toBe(true);
+
+    updateCommentMasks(document, { hideCodeComments: false, hideSummaryComments: true, collapseSummaryComments: true });
+    expect(el.querySelector('.bbrd-comment-fold')).toBeNull();
+    expect(el.querySelector('[data-key="code-line"]').classList.contains('bbrd-hide-line')).toBe(true);
+    expect(el.querySelector('.bbrd-fold-line')).toBeNull();
     el.remove();
   });
 
@@ -80,6 +98,12 @@ describe('updateCommentMasks', () => {
     expect(rows[1].querySelector('.bbrd-hide-comment').textContent).toBe('// trailing');
     expect(hidden(rows[2])).toEqual([true, true]);
     expect(rows[2].classList.contains('bbrd-hide-line')).toBe(true);
+    const folds = [...el.querySelectorAll('.bbrd-comment-fold')];
+    expect(folds).toHaveLength(1);
+    expect(folds[0].querySelector('.bbrd-fold-pill').textContent).toBe('Comments - 1 line');
+    expect(rows[0].classList.contains('bbrd-hide-line')).toBe(true);
+    expect(rows[2].classList.contains('bbrd-hide-line')).toBe(true);
+    expect(rows[2].querySelector('.bbrd-comment-fold, .bbrd-fold-line')).toBeNull();
     el.remove();
   });
 

@@ -48,6 +48,7 @@
 
         <fieldset>
           <legend>File list</legend>
+          <label class="row"><input type="checkbox" name="hideReviewGroups" /> Hide review path</label>
           <label class="row"><input type="checkbox" name="hideMarkdown" /> Hide .md files</label>
           <label class="row">
             Hide extensions
@@ -55,7 +56,7 @@
           </label>
           <label class="row"><input type="checkbox" name="hideCodeComments" /> Hide code comments (JS, TS, C#)</label>
           <label class="row"><input type="checkbox" name="hideSummaryComments" /> Hide summary comments (/// and /** */)</label>
-          <p class="hint">A line that is only a comment folds into a Comment section you can open. A comment after code on the same line comes off that line, and the code stays.</p>
+          <label class="row"><input type="checkbox" name="collapseSummaryComments" /> Collapse summary comments</label>
           <label class="row"><input type="checkbox" name="hideTestFolders" /> Hide test projects (folders ending in Tests)</label>
           <label class="row"><input type="checkbox" name="hideProjects" /> Hide solution and project files (.sln, .slnx, .csproj, and other project types)</label>
           <label class="row"><input type="checkbox" name="hideGenerated" /> Hide generated files (lockfiles, minified code, Designer.cs)</label>
@@ -64,6 +65,12 @@
             Hide pattern
             <input type="text" name="hidePattern" placeholder="\.Tests|tmp/" spellcheck="false" />
           </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Review workflows</legend>
+          <p class="hint">Choose which workflow a pull request shows. Each group has a name, a colour, and a saved pattern. Patterns can be reused and edited. This is saved in the browser and used on every pull request. .NET Workflow is the sample.</p>
+          <div id="workflows"></div>
         </fieldset>
 
         <fieldset>

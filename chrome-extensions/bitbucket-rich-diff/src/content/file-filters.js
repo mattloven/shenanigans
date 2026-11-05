@@ -1,7 +1,10 @@
 import { CATEGORY_LABEL, CATEGORY_ORDER, compileHidePattern, fileCategory, formatCount, formatHideSummary, groupCountText, isHiddenFolder, parseExtensions, pathFromFileLink } from '../core/file-filter.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
+import { activeReviewGroup } from './review-groups.js';
 
 const MENU_LABEL = 'Hide files and comments';
+/** File rules a review group replaces. Comment checkboxes are not in this list. */
+const FILE_FILTERS = ['hideMarkdown', 'hideTestFolders', 'hideProjects', 'hideGenerated', 'hideCommentFiles', 'hiddenExtensions', 'hidePattern'];
 const VIEWED_COUNTER = /^(\d[\d,]*)\s+of\s+(\d[\d,]*)\s+files?\s+viewed$/i;
 const CHANGED_COUNTER = /^(\d[\d,]*)\s+files?\s+changed$/i;
 const ORIGINAL_VIEWED = 'bbrdViewedOriginal';
@@ -77,6 +80,9 @@ function ensurePanel(doc, onChange) {
   } else {
     parkSummary(panel);
   }
+  shapeCommentOptions(panel);
+  shapeReviewOption(panel);
+  shapeWorkflowSlot(panel);
   changeHandlers.set(panel, onChange);
   return panel;
 }
@@ -128,6 +134,19 @@ function parkSummary(panel) {
   if (head && head.textContent.replace(/\s+/g, ' ').trim() !== 'Hide') head.textContent = 'Hide';
 }
 
+/** Drops the old comment paragraph and adds Collapse summary comments on a menu built earlier. */
+function shapeCommentOptions(panel) {
+  panel.querySelector('.bbrd-comment-explain')?.remove();
+  if (panel.querySelector('[data-filter="collapseSummaryComments"]')) return;
+  const summary = panel.querySelector('[data-filter="hideSummaryComments"]')?.closest('label');
+  if (!summary) return;
+  const label = panel.ownerDocument.createElement('label');
+  label.className = 'bbrd-check';
+  label.title = 'Folds /// docs and /** JSDoc */ into a section. Unavailable while summary comments are hidden.';
+  label.innerHTML = '<input type="checkbox" data-filter="collapseSummaryComments" /> Collapse summary comments';
+  summary.insertAdjacentElement('afterend', label);
+}
+
 function buildPanel() {
   const panel = document.createElement('div');
   panel.id = 'bbrd-hide-menu';
@@ -137,10 +156,17 @@ function buildPanel() {
   panel.hidden = true;
   panel.innerHTML = `
     <div class="bbrd-filters-head">Hide</div>
+    <div class="bbrd-workflow-slot">
+      <div class="bbrd-filters-section">Workflow</div>
+      <label class="bbrd-ext">Show <select data-workflow aria-label="Review workflow"></select></label>
+      <button type="button" class="bbrd-workflow-open">Edit groups</button>
+      <p class="bbrd-hint">Name, colour, filter, and order. Saved for every pull request. .NET Workflow is the sample.</p>
+    </div>
+    <label class="bbrd-check" title="Hides the Review path section under the summary."><input type="checkbox" data-filter="hideReviewGroups" /> Review path</label>
     <label class="bbrd-check" title="Also hides .markdown and the other markdown extensions"><input type="checkbox" data-filter="hideMarkdown" /> Markdown files</label>
     <label class="bbrd-check" title="Line comments and block comments"><input type="checkbox" data-filter="hideCodeComments" /> Code comments</label>
-    <label class="bbrd-check" title="C# documentation comments and JSDoc blocks"><input type="checkbox" data-filter="hideSummaryComments" /> Summary comments</label>
-    <p class="bbrd-hint">JavaScript, TypeScript and C#</p>
+    <label class="bbrd-check" title="C# documentation comments and JSDoc blocks. Removes them, with no section to open."><input type="checkbox" data-filter="hideSummaryComments" /> Summary comments</label>
+    <label class="bbrd-check" title="Folds /// docs and /** JSDoc */ into a section. Unavailable while summary comments are hidden."><input type="checkbox" data-filter="collapseSummaryComments" /> Collapse summary comments</label>
     <label class="bbrd-check" title="Folders ending in Tests, such as Foo.Tests and Foo.UnitTests, and every file inside them"><input type="checkbox" data-filter="hideTestFolders" /> Test projects</label>
     <label class="bbrd-check" title="Solution files and every project type: .sln, .slnx, .csproj, .fsproj, .vbproj, .vcxproj"><input type="checkbox" data-filter="hideProjects" /> Solution and project files</label>
     <label class="bbrd-check" title="Lockfiles, minified code, and generated source such as Designer.cs"><input type="checkbox" data-filter="hideGenerated" /> Generated files</label>
@@ -154,6 +180,13 @@ function buildPanel() {
     </div>`;
   panel.addEventListener('click', (event) => {
     event.stopPropagation();
+    const opener = event.target.closest('.bbrd-workflow-open');
+    if (opener && panel.contains(opener)) {
+      event.preventDefault();
+      closeMenu(panel.ownerDocument);
+      panel.ownerDocument.dispatchEvent(new CustomEvent('bbrd-edit-workflow'));
+      return;
+    }
     const toggle = event.target.closest('.bbrd-hidden-toggle');
     if (!toggle || !panel.contains(toggle)) return;
     event.preventDefault();
@@ -163,10 +196,16 @@ function buildPanel() {
   });
   panel.addEventListener('keydown', (event) => event.stopPropagation());
   panel.addEventListener('change', (event) => {
+    const workflow = event.target.closest('[data-workflow]');
+    if (workflow instanceof HTMLSelectElement && panel.contains(workflow)) {
+      changeHandlers.get(panel)?.('activeReviewWorkflow', workflow.value);
+      return;
+    }
     const input = event.target.closest('[data-filter]');
     if (!input) return;
     const key = input.dataset.filter;
     const value = key === 'hiddenExtensions' ? parseExtensions(input.value) : key === 'hidePattern' ? input.value : input.checked;
+    if (key === 'hideSummaryComments') lockCollapse(panel, input.checked);
     changeHandlers.get(panel)?.(key, value);
   });
   return panel;
@@ -242,17 +281,52 @@ function placeMenu(host, panel) {
   panel.style.top = `${Math.round(top)}px`;
 }
 
+/** Adds the workflow picker on a menu built before it existed. */
+function shapeWorkflowSlot(panel) {
+  if (panel.querySelector('[data-workflow]')) return;
+  const head = panel.querySelector('.bbrd-filters-head');
+  if (!head) return;
+  const slot = panel.ownerDocument.createElement('div');
+  slot.className = 'bbrd-workflow-slot';
+  slot.innerHTML = `
+    <div class="bbrd-filters-section">Workflow</div>
+    <label class="bbrd-ext">Show <select data-workflow aria-label="Review workflow"></select></label>
+    <button type="button" class="bbrd-workflow-open">Edit groups</button>
+    <p class="bbrd-hint">Name, colour, filter, and order. Saved for every pull request. .NET Workflow is the sample.</p>`;
+  head.insertAdjacentElement('afterend', slot);
+}
+
+/** Adds the Review path checkbox on a menu built before it existed. */
+function shapeReviewOption(panel) {
+  if (panel.querySelector('[data-filter="hideReviewGroups"]')) return;
+  const head = panel.querySelector('.bbrd-filters-head');
+  if (!head) return;
+  const label = panel.ownerDocument.createElement('label');
+  label.className = 'bbrd-check';
+  label.title = 'Hides the Review path section under the summary.';
+  label.innerHTML = '<input type="checkbox" data-filter="hideReviewGroups" /> Review path';
+  head.insertAdjacentElement('afterend', label);
+}
+
 function syncPanel(panel, settings) {
+  const review = panel.querySelector('[data-filter="hideReviewGroups"]');
   const markdown = panel.querySelector('[data-filter="hideMarkdown"]');
   const code = panel.querySelector('[data-filter="hideCodeComments"]');
   const summary = panel.querySelector('[data-filter="hideSummaryComments"]');
+  const collapse = panel.querySelector('[data-filter="collapseSummaryComments"]');
   const tests = panel.querySelector('[data-filter="hideTestFolders"]');
   const projects = panel.querySelector('[data-filter="hideProjects"]');
   const generated = panel.querySelector('[data-filter="hideGenerated"]');
   const commentFiles = panel.querySelector('[data-filter="hideCommentFiles"]');
+  if (review && review.checked !== !!settings.hideReviewGroups) review.checked = !!settings.hideReviewGroups;
   if (markdown.checked !== settings.hideMarkdown) markdown.checked = settings.hideMarkdown;
   if (code.checked !== settings.hideCodeComments) code.checked = settings.hideCodeComments;
   if (summary.checked !== settings.hideSummaryComments) summary.checked = settings.hideSummaryComments;
+  if (collapse) {
+    const collapseOn = settings.hideSummaryComments ? false : !!settings.collapseSummaryComments;
+    if (collapse.checked !== collapseOn) collapse.checked = collapseOn;
+    lockCollapse(panel, settings.hideSummaryComments);
+  }
   if (tests.checked !== settings.hideTestFolders) tests.checked = settings.hideTestFolders;
   if (projects.checked !== settings.hideProjects) projects.checked = settings.hideProjects;
   if (generated.checked !== settings.hideGenerated) generated.checked = settings.hideGenerated;
@@ -261,9 +335,53 @@ function syncPanel(panel, settings) {
   const text = settings.hiddenExtensions.join(', ');
   if (document.activeElement !== extensions && extensions.value !== text) extensions.value = text;
   const pattern = panel.querySelector('[data-filter="hidePattern"]');
+  const workflow = panel.querySelector('[data-workflow]');
+  if (workflow instanceof HTMLSelectElement) paintWorkflowSelect(workflow, settings);
   if (document.activeElement !== pattern && pattern.value !== settings.hidePattern) pattern.value = settings.hidePattern;
   const invalid = settings.hidePattern.trim() !== '' && !compileHidePattern(settings.hidePattern);
   pattern.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+  pauseFileFilters(panel, Boolean(activeReviewGroup()));
+}
+
+/**
+ * @param {HTMLSelectElement} select
+ * @param {{ reviewWorkflows?: { id: string, name: string }[], activeReviewWorkflow?: string }} settings
+ */
+function paintWorkflowSelect(select, settings) {
+  const workflows = Array.isArray(settings.reviewWorkflows) && settings.reviewWorkflows.length
+    ? settings.reviewWorkflows
+    : [{ id: 'dotnet', name: '.NET Workflow' }];
+  const active = workflows.some((item) => item.id === settings.activeReviewWorkflow) ? settings.activeReviewWorkflow : workflows[0].id;
+  const signature = `${workflows.map((item) => `${item.id}\t${item.name}`).join('\n')}\n${active}`;
+  if (select.dataset.signature === signature) return;
+  select.dataset.signature = signature;
+  select.replaceChildren();
+  for (const workflow of workflows) {
+    const option = select.ownerDocument.createElement('option');
+    option.value = workflow.id;
+    option.textContent = workflow.name;
+    select.append(option);
+  }
+  select.value = active ?? workflows[0].id;
+}
+
+/** A selected review group is the only file filter. The checkboxes stay put and come back when the group is cleared. */
+function pauseFileFilters(panel, paused) {
+  for (const key of FILE_FILTERS) {
+    const input = panel.querySelector(`[data-filter="${key}"]`);
+    if (!(input instanceof HTMLInputElement)) continue;
+    input.disabled = paused;
+    input.closest('label')?.classList.toggle('bbrd-check-disabled', paused);
+  }
+}
+
+/** Hide and collapse are alternatives. Hiding summary comments turns collapse off and leaves it unavailable. */
+function lockCollapse(panel, hideSummary) {
+  const collapse = panel.querySelector('[data-filter="collapseSummaryComments"]');
+  if (!(collapse instanceof HTMLInputElement)) return;
+  collapse.disabled = hideSummary;
+  collapse.closest('label')?.classList.toggle('bbrd-check-disabled', hideSummary);
+  if (hideSummary && collapse.checked) collapse.checked = false;
 }
 
 function applyHidden(root, settings, commentOnly) {
@@ -272,26 +390,28 @@ function applyHidden(root, settings, commentOnly) {
   for (const key of CATEGORY_ORDER) counts[key] = 0;
   const lines = { added: 0, removed: 0 };
   const seen = new Set();
+  const lens = activeReviewGroup();
   for (const link of root.querySelectorAll('a[href*="#chg-"]')) {
     const path = pathFromFileLink(link.getAttribute('href'));
     if (!path || seen.has(path)) continue;
     seen.add(path);
     const item = link.closest('li') ?? link;
     const category = fileCategory(path, settings, commentOnly);
-    if (category) {
+    if (category && !lens) {
       counts[category] += 1;
       const stat = readStat(item);
       lines.added += stat.added;
       lines.removed += stat.removed;
     }
-    setHidden(item, Boolean(category) && !revealed);
-    syncChip(item, revealed && category ? category : null);
+    setHidden(item, Boolean(category) && !revealed && !lens);
+    syncChip(item, revealed && category && !lens ? category : null);
   }
   for (const article of findFileDiffs(root)) {
-    const category = fileCategory(getFilePath(article), settings, commentOnly);
-    setHidden(article, Boolean(category) && !revealed);
+    const path = getFilePath(article);
+    const category = fileCategory(path, settings, commentOnly);
+    setHidden(article, Boolean(category) && !revealed && !lens);
   }
-  markHiddenFolders(root, settings);
+  markHiddenFolders(root, settings, lens);
   const hiddenCount = CATEGORY_ORDER.reduce((sum, key) => sum + (counts[key] || 0), 0);
   const summary = formatHideSummary(counts, lines);
   syncFlyoutSummary(root, summary);
@@ -433,14 +553,14 @@ function setHidden(element, hide) {
   if (element.classList.contains('bbrd-file-hidden') !== hide) element.classList.toggle('bbrd-file-hidden', hide);
 }
 
-function markHiddenFolders(root, settings) {
+function markHiddenFolders(root, settings, lens) {
   if (!root.querySelectorAll) return;
   for (const button of root.querySelectorAll('button')) {
     if (!(button instanceof HTMLButtonElement)) continue;
     if (!button.querySelector('[aria-label="Directory"]')) continue;
     const list = button.closest('ul[role="list"]');
     if (!list?.querySelector('a[href*="#chg-"]')) continue;
-    syncFolderPill(button, isHiddenFolder(directoryPath(button), settings));
+    syncFolderPill(button, !lens && isHiddenFolder(directoryPath(button), settings));
   }
 }
 

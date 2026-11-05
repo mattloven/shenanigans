@@ -283,6 +283,25 @@ export function hiddenIntervals(ranges, opts) {
   return ranges.filter((range) => (range.kind === 'comment' && opts.hideCodeComments) || (range.kind === 'summary' && opts.hideSummaryComments));
 }
 
+/**
+ * A full summary line folds only when collapse is on and hide is off.
+ * Hide removes it with no bar. A full code-comment line still folds when code comments are hidden.
+ * @param {string} text
+ * @param {{ start: number, end: number, kind: CommentKind }[]} ranges
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean, collapseSummaryComments?: boolean }} opts
+ * @returns {{ hideLine: boolean, fold: boolean, intervals: { start: number, end: number }[] }}
+ */
+export function classifyCommentLine(text, ranges, opts) {
+  const summaryRanges = ranges.filter((range) => range.kind === 'summary');
+  const codeRanges = ranges.filter((range) => range.kind === 'comment');
+  const collapseSummary = !!opts.collapseSummaryComments && !opts.hideSummaryComments && lineIsFullyHidden(text, summaryRanges);
+  const foldCode = !!opts.hideCodeComments && lineIsFullyHidden(text, codeRanges);
+  const vanishSummary = !!opts.hideSummaryComments && lineIsFullyHidden(text, summaryRanges);
+  const fold = collapseSummary || foldCode;
+  const hideLine = fold || vanishSummary;
+  return { hideLine, fold, intervals: hideLine ? [] : hiddenIntervals(ranges, opts) };
+}
+
 /** True when the line has nothing left to read once those intervals are removed. */
 export function lineIsFullyHidden(line, intervals) {
   if (intervals.length === 0) return false;
@@ -321,21 +340,24 @@ export function classifyDiffRows(rows, language, opts) {
     if (row.type === '-') {
       const scanned = scanLine(row.text, oldState, language);
       oldState = scanned.state;
-      const intervals = hiddenIntervals(scanned.ranges, opts);
-      return { hideLine: lineIsFullyHidden(row.text, intervals), intervals };
+      return classifyCommentLine(row.text, scanned.ranges, opts);
     }
     if (row.type === '+') {
       const scanned = scanLine(row.text, newState, language);
       newState = scanned.state;
-      const intervals = hiddenIntervals(scanned.ranges, opts);
-      return { hideLine: lineIsFullyHidden(row.text, intervals), intervals };
+      return classifyCommentLine(row.text, scanned.ranges, opts);
     }
     const oldScan = scanLine(row.text, oldState, language);
     const newScan = scanLine(row.text, newState, language);
     oldState = oldScan.state;
     newState = newScan.state;
-    const intervals = overlap(hiddenIntervals(oldScan.ranges, opts), hiddenIntervals(newScan.ranges, opts));
-    return { hideLine: lineIsFullyHidden(row.text, intervals), intervals };
+    const oldLine = classifyCommentLine(row.text, oldScan.ranges, opts);
+    const newLine = classifyCommentLine(row.text, newScan.ranges, opts);
+    return {
+      hideLine: oldLine.hideLine && newLine.hideLine,
+      fold: oldLine.fold && newLine.fold,
+      intervals: overlap(oldLine.intervals, newLine.intervals),
+    };
   });
 }
 
@@ -356,18 +378,17 @@ function columnSpacer(cell, other, oppositeChange) {
 export function classifySideBySideRows(rows, language, opts) {
   let oldState = initialCommentState();
   let newState = initialCommentState();
-  const shown = () => ({ hideLine: false, intervals: [] });
+  const shown = () => ({ hideLine: false, fold: false, intervals: [] });
   return rows.map(({ cells }) => {
     const [left, right] = cells;
-    /** @type {Array<{ hideLine: boolean, intervals: { start: number, end: number }[] }>} */
+    /** @type {Array<{ hideLine: boolean, fold: boolean, intervals: { start: number, end: number }[] }>} */
     const out = [];
     if (left) {
       if (columnSpacer(left, right, '+')) out.push(shown());
       else {
         const scanned = scanLine(left.text, oldState, language);
         oldState = scanned.state;
-        const intervals = hiddenIntervals(scanned.ranges, opts);
-        out.push({ hideLine: lineIsFullyHidden(left.text, intervals), intervals });
+        out.push(classifyCommentLine(left.text, scanned.ranges, opts));
       }
     }
     if (right) {
@@ -375,8 +396,7 @@ export function classifySideBySideRows(rows, language, opts) {
       else {
         const scanned = scanLine(right.text, newState, language);
         newState = scanned.state;
-        const intervals = hiddenIntervals(scanned.ranges, opts);
-        out.push({ hideLine: lineIsFullyHidden(right.text, intervals), intervals });
+        out.push(classifyCommentLine(right.text, scanned.ranges, opts));
       }
     }
     return out;

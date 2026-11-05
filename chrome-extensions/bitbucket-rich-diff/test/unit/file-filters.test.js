@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountFileFilters, resetHiddenReveal } from '../../src/content/file-filters.js';
+import { mountReviewGroups, resetReviewGroup } from '../../src/content/review-groups.js';
 import { DEFAULT_SETTINGS } from '../../src/core/settings.js';
 
 function installPage() {
@@ -23,6 +24,7 @@ function installPage() {
 describe('mountFileFilters', () => {
   beforeEach(() => {
     resetHiddenReveal();
+    resetReviewGroup();
     installPage();
   });
 
@@ -41,6 +43,11 @@ describe('mountFileFilters', () => {
     expect(document.querySelector('.bbrd-filters').parentElement).toBe(document.body);
     expect(document.querySelector('.bbrd-filters').hidden).toBe(true);
     expect(document.querySelector('.bbrd-filters-head').textContent.trim()).toBe('Hide');
+    expect(document.querySelector('.bbrd-comment-explain')).toBeNull();
+    expect(document.querySelector('[data-filter="collapseSummaryComments"]').closest('label').textContent).toMatch(/Collapse summary comments/);
+    expect(document.querySelector('[data-filter="hideReviewGroups"]').closest('label').textContent).toMatch(/Review path/);
+    expect(document.querySelector('[data-workflow]').value).toBe('dotnet');
+    expect(document.querySelector('.bbrd-workflow-open').textContent).toBe('Edit groups');
     expect(document.querySelector('.bbrd-filters').lastElementChild.classList.contains('bbrd-filters-foot')).toBe(true);
     expect(document.querySelector('.bbrd-filters-foot').hidden).toBe(true);
     expect(document.querySelector('.bbrd-stats-actions').contains(document.querySelector('.bbrd-menu-host'))).toBe(true);
@@ -97,6 +104,67 @@ describe('mountFileFilters', () => {
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(panel.hidden).toBe(true);
     expect(button.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('lets a review group replace the file filters and leaves the comment checkboxes on', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <ul id="file-tree" role="list">
+        <li><button type="button"><span aria-label="Directory"></span><span>App.Tests</span></button>
+          <ul role="list"><li><a href="#chg-src/App.Tests/ChargeTests.cs">ChargeTests.cs</a></li></ul>
+        </li>
+      </ul>`);
+    const onChange = vi.fn();
+    const settings = { ...DEFAULT_SETTINGS, hideMarkdown: true, hideTestFolders: true, hideCodeComments: true };
+    const reapply = () => {
+      mountFileFilters(document, settings, onChange);
+      mountReviewGroups(document, null, { getItem: () => null });
+    };
+    document.addEventListener('bbrd-review-group', reapply);
+    try {
+      mountFileFilters(document, settings, onChange);
+      mountReviewGroups(document, null, { getItem: () => null });
+      expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
+      expect(document.querySelector('a[href="#chg-src/App.Tests/ChargeTests.cs"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
+
+      document.querySelector('[data-group="tests"]').click();
+      expect(document.querySelector('a[href="#chg-src/App.Tests/ChargeTests.cs"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
+      expect(document.querySelector('a[href="#chg-src/App.Tests/ChargeTests.cs"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(false);
+      expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(true);
+      expect(document.querySelector('[data-filter="hideMarkdown"]').disabled).toBe(true);
+      expect(document.querySelector('[data-filter="hideTestFolders"]').disabled).toBe(true);
+      expect(document.querySelector('[data-filter="hidePattern"]').disabled).toBe(true);
+      expect(document.querySelector('[data-filter="hideCodeComments"]').disabled).toBe(false);
+      expect(document.querySelector('[data-filter="hideCodeComments"]').checked).toBe(true);
+      expect(document.querySelector('[data-filter="collapseSummaryComments"]').disabled).toBe(false);
+      expect(document.querySelector('[aria-label="Directory"]').closest('button').querySelector('.bbrd-hidden-pill')).toBeNull();
+
+      document.querySelector('[data-group="tests"]').click();
+      expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
+      expect(document.querySelector('a[href="#chg-src/App.Tests/ChargeTests.cs"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
+      expect(document.querySelector('[data-filter="hideMarkdown"]').disabled).toBe(false);
+      expect(document.querySelector('[aria-label="Directory"]').closest('button').querySelector('.bbrd-hidden-pill')).not.toBeNull();
+    } finally {
+      document.removeEventListener('bbrd-review-group', reapply);
+    }
+  });
+
+  it('unchecks and disables collapse while summary comments are hidden', () => {
+    const onChange = vi.fn();
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, hideSummaryComments: true, collapseSummaryComments: true }, onChange);
+    const collapse = document.querySelector('[data-filter="collapseSummaryComments"]');
+    expect(collapse.checked).toBe(false);
+    expect(collapse.disabled).toBe(true);
+    expect(collapse.closest('label').classList.contains('bbrd-check-disabled')).toBe(true);
+
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, collapseSummaryComments: true }, onChange);
+    const hide = document.querySelector('[data-filter="hideSummaryComments"]');
+    expect(collapse.disabled).toBe(false);
+    expect(collapse.checked).toBe(true);
+    hide.checked = true;
+    hide.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(collapse.checked).toBe(false);
+    expect(collapse.disabled).toBe(true);
+    expect(onChange).toHaveBeenCalledWith('hideSummaryComments', true);
   });
 
   it('hides matching files and keeps Show/Hide in the flyout, never the file tree', () => {
