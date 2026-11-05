@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classifyDiffRows, classifySideBySideRows, commentLanguage, hiddenIntervals, scanLine, initialCommentState } from '../../src/core/comments.js';
-import { fileCategory, formatHideSummary, isHiddenFile, isHiddenFolder, parseExtensions, pathFromFileLink } from '../../src/core/file-filter.js';
+import { fileCategory, formatCount, formatHideSummary, isHiddenFile, isHiddenFolder, parseExtensions, pathFromFileLink } from '../../src/core/file-filter.js';
 
 const both = { hideCodeComments: true, hideSummaryComments: true };
 const codeOnly = { hideCodeComments: true, hideSummaryComments: false };
@@ -192,6 +192,10 @@ describe('file filter', () => {
     expect(fileCategory('src/Foo.Tests/Foo.csproj', { hideProjects: true, hideTestFolders: true })).toBe('projects');
     expect(fileCategory('src/Foo.Tests/Charge.cs', { hideProjects: true, hideTestFolders: true })).toBe('tests');
     expect(formatHideSummary({ tests: 4, projects: 1, docs: 1 }, { added: 12, removed: 3 })).toBe('6 hidden · 4 tests · 1 project · 1 doc +12 −3');
+    expect(formatCount(1404)).toBe('1,404');
+    expect(formatCount(82)).toBe('82');
+    expect(formatCount(247650)).toBe('247,650');
+    expect(formatHideSummary({ projects: 11 }, { added: 247650, removed: 19 })).toBe('11 hidden · 11 projects +247,650 −19');
   });
 
   it('marks a folder the test-project or pattern rule hides, and leaves its parents alone', () => {
