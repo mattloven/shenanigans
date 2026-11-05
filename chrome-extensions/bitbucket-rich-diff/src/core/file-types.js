@@ -17,12 +17,12 @@ export function detectFileType(path) {
 export const VIEWS = {
   markdown: [
     { id: 'diff', label: 'Diff', title: 'Standard Bitbucket diff (with comments)' },
-    { id: 'changes', label: 'Rich diff', title: 'Rendered markdown with tracked changes' },
+    { id: 'changes', label: 'Rich Diff', title: 'Rendered markdown with tracked changes' },
     { id: 'preview', label: 'Preview', title: 'Rendered markdown of the new version' },
   ],
   json: [
     { id: 'diff', label: 'Diff', title: 'Standard Bitbucket diff (with comments)' },
-    { id: 'changes', label: 'Rich diff', title: 'Structural diff: changed keys and values' },
+    { id: 'changes', label: 'Rich Diff', title: 'Structural diff: changed keys and values' },
     { id: 'preview', label: 'Tree', title: 'Collapsible tree of the new version' },
   ],
 };

@@ -13,16 +13,16 @@ const FIGURES = [
   ['generated', 'Generated'],
 ];
 
-/** Adds one Stats tab after Commits and fills it from the files currently in the diff. Safe to call on every scan. */
+/** Adds one Stats tab after Commits in the pull request tab list and fills it from the diff. Safe to call on every scan. */
 export function mountStatsTab(root) {
   const doc = root.nodeType === 9 ? root : root.ownerDocument ?? document;
-  const commits = findCommitsTab(root);
-  if (!commits?.parentElement) return;
-  const tab = ensureTab(doc, commits);
-  const panel = ensurePanel(doc, commits.parentElement);
+  const found = findPrTabBar(root);
+  if (!found) return;
+  const tab = ensureTab(doc, found.commits);
+  const panel = ensurePanel(doc, found.list);
   const summary = summarizeFiles(filesIn(root));
   fillPanel(panel, summary);
-  if (tab.getAttribute('aria-expanded') !== 'true') panel.hidden = true;
+  if (tab.getAttribute('aria-selected') !== 'true') panel.hidden = true;
 }
 
 export function clearStats(root) {
@@ -31,16 +31,32 @@ export function clearStats(root) {
   doc.querySelector('.bbrd-stats')?.remove();
 }
 
-function findCommitsTab(root) {
+/**
+ * The pull request tab list is the horizontal row Overview / Files changed / Commits.
+ * The repository sidebar also has a Commits link, and that one comes first in the page.
+ * Only a tablist that contains all three pull request tabs qualifies.
+ */
+function findPrTabBar(root) {
   if (!root.querySelectorAll) return null;
-  for (const node of root.querySelectorAll('a, button, [role="tab"]')) {
-    if (!(node instanceof HTMLElement)) continue;
-    if (node.classList.contains('bbrd-stats-tab') || node.closest('.bbrd-stats, .bbrd-filters')) continue;
-    const href = node.getAttribute('href') || '';
-    const name = `${node.getAttribute('aria-label') ?? ''} ${node.textContent ?? ''}`.replace(/\s+/g, ' ').trim();
-    if (/\/commits\/?(?:$|\?|#)/.test(href) || /^commits\b/i.test(name)) return node;
+  for (const list of root.querySelectorAll('[role="tablist"]')) {
+    if (!(list instanceof HTMLElement)) continue;
+    if (list.closest('.bbrd-tabs, .bbrd-stats, .bbrd-filters')) continue;
+    const tabs = [...list.querySelectorAll('[role="tab"]')].filter((tab) => tab instanceof HTMLElement && !tab.classList.contains('bbrd-stats-tab'));
+    if (!tabs.some((tab) => tabKind(tab) === 'overview')) continue;
+    if (!tabs.some((tab) => tabKind(tab) === 'files')) continue;
+    const commits = tabs.find((tab) => tabKind(tab) === 'commits');
+    if (commits) return { list, commits };
   }
   return null;
+}
+
+function tabKind(tab) {
+  const href = tab.getAttribute('href') || '';
+  const name = `${tab.getAttribute('aria-label') ?? ''} ${tab.textContent ?? ''}`.replace(/\s+/g, ' ').trim();
+  if (/\/pull-requests\/[^/]+\/commits\/?(?:$|\?|#)/.test(href) || /^commits/i.test(name)) return 'commits';
+  if (/\/pull-requests\/[^/]+\/diff\/?(?:$|\?|#)/.test(href) || /^files?\s+changed/i.test(name) || /^diff\b/i.test(name)) return 'files';
+  if (/\/pull-requests\/[^/]+\/overview\/?(?:$|\?|#)/.test(href) || /^overview\b/i.test(name)) return 'overview';
+  return '';
 }
 
 function ensureTab(doc, commits) {
@@ -50,12 +66,13 @@ function ensureTab(doc, commits) {
     tab.type = 'button';
     tab.className = 'bbrd-stats-tab';
     tab.textContent = 'Stats';
-    tab.setAttribute('aria-expanded', 'false');
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', 'false');
     tab.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      const open = tab.getAttribute('aria-expanded') !== 'true';
-      tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+      const open = tab.getAttribute('aria-selected') !== 'true';
+      tab.setAttribute('aria-selected', open ? 'true' : 'false');
       const panel = doc.querySelector('.bbrd-stats');
       if (panel) panel.hidden = !open;
     });
@@ -140,12 +157,10 @@ function sumPhrase(text, pattern) {
 }
 
 function fillPanel(panel, summary) {
-  const lines = `+${summary.added} −${summary.removed}`;
   const tests = summary.testFiles === 1 ? '1 file' : `${summary.testFiles} files`;
   const testWord = summary.tests === 1 ? '1 test' : `${summary.tests} tests`;
   const values = {
     files: String(summary.files),
-    lines,
     markdown: String(summary.markdown),
     tests: `${tests} · ${testWord}`,
     projects: String(summary.projects),
@@ -155,7 +170,52 @@ function fillPanel(panel, summary) {
     const slot = panel.querySelector(`[data-stat="${key}"] strong`);
     if (slot && slot.textContent !== value) slot.textContent = value;
   }
+  const lines = panel.querySelector('[data-stat="lines"] strong');
+  if (lines) setLineCounts(lines, summary.added, summary.removed);
   const lead = panel.querySelector('.bbrd-stats-lead');
-  const sentence = `${summary.files} files changed, ${lines}. ${summary.markdown} markdown, ${tests} with ${testWord}.`;
-  if (lead && lead.textContent !== sentence) lead.textContent = sentence;
+  if (lead) setLead(lead, summary, tests, testWord);
+}
+
+function setLineCounts(slot, added, removed) {
+  let add = slot.querySelector('.bbrd-add');
+  let del = slot.querySelector('.bbrd-del');
+  if (!add || !del) {
+    slot.replaceChildren();
+    add = slot.ownerDocument.createElement('span');
+    add.className = 'bbrd-add';
+    del = slot.ownerDocument.createElement('span');
+    del.className = 'bbrd-del';
+    slot.append(add, slot.ownerDocument.createTextNode(' '), del);
+  }
+  const addText = `+${added}`;
+  const delText = `−${removed}`;
+  if (add.textContent !== addText) add.textContent = addText;
+  if (del.textContent !== delText) del.textContent = delText;
+}
+
+function setLead(lead, summary, tests, testWord) {
+  let add = lead.querySelector('.bbrd-add');
+  let del = lead.querySelector('.bbrd-del');
+  let prefix = lead.querySelector('[data-part="prefix"]');
+  let suffix = lead.querySelector('[data-part="suffix"]');
+  if (!add || !del || !prefix || !suffix) {
+    lead.replaceChildren();
+    prefix = lead.ownerDocument.createElement('span');
+    prefix.dataset.part = 'prefix';
+    add = lead.ownerDocument.createElement('span');
+    add.className = 'bbrd-add';
+    del = lead.ownerDocument.createElement('span');
+    del.className = 'bbrd-del';
+    suffix = lead.ownerDocument.createElement('span');
+    suffix.dataset.part = 'suffix';
+    lead.append(prefix, add, lead.ownerDocument.createTextNode(' '), del, suffix);
+  }
+  const prefixText = `${summary.files} files changed, `;
+  const suffixText = `. ${summary.markdown} markdown, ${tests} with ${testWord}.`;
+  const addText = `+${summary.added}`;
+  const delText = `−${summary.removed}`;
+  if (prefix.textContent !== prefixText) prefix.textContent = prefixText;
+  if (suffix.textContent !== suffixText) suffix.textContent = suffixText;
+  if (add.textContent !== addText) add.textContent = addText;
+  if (del.textContent !== delText) del.textContent = delText;
 }

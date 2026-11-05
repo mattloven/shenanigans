@@ -1,12 +1,12 @@
 # Bitbucket Rich Diff
 
-A Chrome extension that adds **Diff · Rich diff · Preview** tabs to Markdown and JSON files in
+A Chrome extension that adds **Diff · Rich Diff · Preview** tabs to Markdown and JSON files in
 Bitbucket Cloud pull requests.
 
-- **Rich diff (Markdown)**: the rendered document with Word-style tracked changes (insertions
+- **Rich Diff (Markdown)**: the rendered document with Word-style tracked changes (insertions
   underlined in green, deletions struck through in red, and change bars in the margin). Lists,
   tables and code blocks are compared item by item, row by row and line by line.
-- **Rich diff (JSON)**: a structural diff. A summary table of changed paths sits above a collapsible
+- **Rich Diff (JSON)**: a structural diff. A summary table of changed paths sits above a collapsible
   tree. Key reordering is ignored, and arrays are aligned.
 - **Preview / Tree**: plain rendering of the old version, the new version, or both side by side,
   with matching sections aligned.
