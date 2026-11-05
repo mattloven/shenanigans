@@ -68,6 +68,8 @@ function applySpan(path, rows, lines, span, index) {
   const open = openTests.has(key);
   fold.setAttribute('aria-expanded', open ? 'true' : 'false');
   for (const node of nodes) node.classList.toggle('bbrd-test-collapsed', !open);
+  // Focusing the bar scrolls it into view and fights the wheel gesture.
+  fold.addEventListener('mousedown', (event) => event.preventDefault());
   fold.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
