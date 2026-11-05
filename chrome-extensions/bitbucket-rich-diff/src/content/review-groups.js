@@ -390,4 +390,112 @@ function ensureWorkflowOpen(doc) {
 /** @param {Element} item */
 function readLines(item) {
   let added = 0;
-  let remo
+  let removed = 0;
+  const doc = item.ownerDocument;
+  if (!doc?.createTreeWalker) {
+    return { added: sumPhrase(item.textContent || '', 'added'), removed: sumPhrase(item.textContent || '', 'removed') };
+  }
+  const walker = doc.createTreeWalker(item, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const text = node.textContent || '';
+    added += sumPhrase(text, 'added');
+    removed += sumPhrase(text, 'removed');
+    node = walker.nextNode();
+  }
+  return { added, removed };
+}
+
+/**
+ * Counts a row's own "N lines added" / "N lines removed" wording.
+ * The +/− badge is a separate text node, so reading the row's full text glues them
+ * ("+31" and "31 lines added" become "+3131 lines added"). Each text node is counted on its own.
+ * @param {string} text
+ * @param {'added' | 'removed'} kind
+ */
+function sumPhrase(text, kind) {
+  const number = String.raw`\d{1,3}(?:,\d{3})*|\d+`;
+  const plain = new RegExp(`(${number})\\s+lines?\\s+${kind}`, 'gi');
+  let total = 0;
+  for (const match of text.matchAll(plain)) total += Number(match[1].replaceAll(',', ''));
+  return total;
+}
+
+/**
+ * @param {ParentNode} root
+ * @param {import('../core/review-workflows.js').WorkflowGroup[]} groups
+ * @param {import('../core/review-workflows.js').ReviewFilter[]} filters
+ */
+function filesIn(root, groups, filters) {
+  /** @type {ReviewFile[]} */
+  const files = [];
+  const seen = new Set();
+  if (!root.querySelectorAll) return files;
+  for (const link of root.querySelectorAll('a[href*="#chg-"]')) {
+    const path = normalizePath(pathFromFileLink(link.getAttribute('href')));
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    const item = link.closest('li') ?? link;
+    const lines = readLines(item);
+    files.push({ path, group: assignGroup(path, groups, filters), item, added: lines.added, removed: lines.removed });
+  }
+  return files;
+}
+
+/**
+ * A checked Viewed box on an open file wins over the stored map.
+ * @param {ParentNode} root
+ * @param {{ workspace: string, repo: string, prId: number } | null} pr
+ * @param {Storage | null} storage
+ */
+function reviewedPaths(root, pr, storage) {
+  const key = reviewedStorageKey(pr);
+  let stored = new Set();
+  if (key && storage) {
+    try {
+      stored = parseReviewedState(storage.getItem(key));
+    } catch {
+      stored = new Set();
+    }
+  }
+  for (const article of findFileDiffs(root)) {
+    const path = normalizePath(getFilePath(article));
+    const box = article.querySelector('[data-qa="bk-file__header"] input[type="checkbox"], .file-header input[type="checkbox"]');
+    if (!path || !(box instanceof HTMLInputElement)) continue;
+    if (box.checked) stored.add(path);
+    else stored.delete(path);
+  }
+  return stored;
+}
+
+/**
+ * @param {ParentNode} root
+ * @param {ReviewFile[]} files
+ * @param {import('../core/review-workflows.js').WorkflowGroup[]} groups
+ * @param {Set<string>} reviewed
+ * @param {import('../core/review-workflows.js').ReviewFilter[]} filters
+ */
+function applyGroupFilter(root, files, groups, reviewed, filters) {
+  const active = activeGroup;
+  const hidePath = (path, group) => (Boolean(active) && group !== active) || (unviewedOnly && reviewed.has(path));
+  for (const file of files) {
+    file.item.classList.toggle('bbrd-group-hidden', hidePath(file.path, file.group));
+  }
+  if (root.querySelectorAll) {
+    for (const article of findFileDiffs(root)) {
+      const path = normalizePath(getFilePath(article));
+      const hide = !!path && hidePath(path, assignGroup(path, groups, filters));
+      article.classList.toggle('bbrd-group-hidden', hide);
+    }
+    for (const folder of root.querySelectorAll('#file-tree li')) {
+      if (folder.querySelector(':scope > a[href*="#chg-"]')) continue;
+      const links = [...folder.querySelectorAll('a[href*="#chg-"]')];
+      if (!links.length) continue;
+      const allGone = (Boolean(active) || unviewedOnly) && links.every((link) => {
+        const row = link.closest('li');
+        return !!row && (row.classList.contains('bbrd-group-hidden') || row.classList.contains('bbrd-file-hidden'));
+      });
+      folder.classList.toggle('bbrd-group-hidden', allGone);
+    }
+  }
+}
