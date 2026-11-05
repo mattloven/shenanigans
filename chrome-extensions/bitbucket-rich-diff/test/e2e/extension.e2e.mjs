@@ -62,8 +62,8 @@ describe('mock pull request', () => {
       assert.equal(await article(p).locator('.bbrd-tab').count(), 3, p);
     }
     assert.equal(await article('src/app.js').locator('.bbrd-tabs').count(), 0);
-    assert.deepEqual(await article('README.md').locator('.bbrd-tab').allTextContents(), ['Diff', 'Rich diff', 'Preview']);
-    assert.deepEqual(await article('package.json').locator('.bbrd-tab').allTextContents(), ['Diff', 'Rich diff', 'Tree']);
+    assert.deepEqual(await article('README.md').locator('.bbrd-tab').allTextContents(), ['Diff', 'Rich Diff', 'Preview']);
+    assert.deepEqual(await article('package.json').locator('.bbrd-tab').allTextContents(), ['Diff', 'Rich Diff', 'Tree']);
   });
 
   it('opens in Rich diff by default and hides the standard diff', async () => {
@@ -399,6 +399,24 @@ describe('mock pull request', () => {
     await folds.nth(0).click();
     assert.equal(await tests.locator('[data-key="code-line"]:visible', { hasText: 'Assert.Null' }).count(), 1);
     await folds.nth(0).click();
+  });
+
+  it('opens a stats summary next to commits', async () => {
+    const tab = page.getByRole('tab', { name: 'Stats' });
+    assert.equal(await page.locator('.pr-tabs a[href="/acme/payments/pull-requests/42/commits"] + .bbrd-stats-tab').count(), 1);
+    assert.equal(await page.locator('.repo-nav .bbrd-stats-tab').count(), 0);
+    await tab.click();
+    const panel = page.getByRole('region', { name: 'Pull request stats' });
+    const figure = (name) => panel.locator(`[data-stat="${name}"] strong`).textContent();
+    assert.equal(await figure('files'), '14');
+    assert.match(await panel.locator('[data-stat="lines"] .bbrd-add').textContent(), /^\+\d+$/);
+    assert.match(await panel.locator('[data-stat="lines"] .bbrd-del').textContent(), /^−\d+$/);
+    assert.equal(await figure('markdown'), '3');
+    assert.equal(await figure('tests'), '2 files · 2 tests');
+    assert.equal(await figure('projects'), '2');
+    assert.equal(await figure('generated'), '1');
+    await tab.click();
+    assert.equal(await panel.isVisible(), false);
   });
 
   it('re-attaches tabs when Bitbucket re-renders a file header', async () => {
