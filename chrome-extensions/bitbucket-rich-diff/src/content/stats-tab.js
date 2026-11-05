@@ -192,7 +192,7 @@ function testsIn(article, path) {
   const language = commentLanguage(path);
   if (!language || !isTestFile(path)) return 0;
   const lines = [...article.querySelectorAll('[data-key="code-line"]')].map((row) => {
-    const cells = [...row.querySelectorAll('[data-line-type]')]);
+    const cells = [...row.querySelectorAll('[data-line-type]')];
     const cell = cells.find((item) => item.getAttribute('data-line-type') === '+')
       || cells.find((item) => item.getAttribute('data-line-type') !== ' ')
       || cells[0];
