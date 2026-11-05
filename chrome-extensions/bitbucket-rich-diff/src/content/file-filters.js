@@ -246,4 +246,83 @@ function closeMenu(doc) {
   const panel = doc.getElementById('bbrd-hide-menu');
   if (!panel || panel.hidden) return;
   panel.hidden = true;
-  doc.querySelector('.bbrd-menu-button')?.setAttribute('aria-exp
+  doc.querySelector('.bbrd-menu-button')?.setAttribute('aria-expanded', 'false');
+}
+
+function reposition(doc) {
+  const host = doc.querySelector('.bbrd-menu-host');
+  const panel = doc.getElementById('bbrd-hide-menu');
+  if (!host || !panel || panel.hidden) return;
+  placeMenu(host, panel);
+}
+
+function placeMenu(host, panel) {
+  const button = host.querySelector('.bbrd-menu-button');
+  if (!button) return;
+  const rect = button.getBoundingClientRect();
+  const view = host.ownerDocument.defaultView;
+  const viewportWidth = view?.innerWidth ?? 1024;
+  const viewportHeight = view?.innerHeight ?? 768;
+  const width = 280;
+  const margin = 8;
+  const unlaid = rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.left === 0;
+  const offscreen = rect.bottom <= 0 || rect.top >= viewportHeight || rect.right <= 0 || rect.left >= viewportWidth;
+  if (!unlaid && offscreen) {
+    closeMenu(host.ownerDocument);
+    return;
+  }
+  let left = rect.right - width;
+  if (left < margin) left = margin;
+  if (left + width > viewportWidth - margin) left = Math.max(margin, viewportWidth - width - margin);
+  let top = rect.bottom + 4;
+  const height = panel.getBoundingClientRect().height || panel.scrollHeight;
+  if (height && top + height > viewportHeight - margin) top = Math.max(margin, viewportHeight - height - margin);
+  panel.style.left = `${Math.round(left)}px`;
+  panel.style.top = `${Math.round(top)}px`;
+}
+
+/** Adds the workflow picker on a menu built before it existed. */
+function shapeWorkflowSlot(panel) {
+  if (panel.querySelector('[data-workflow]')) return;
+  const head = panel.querySelector('.bbrd-filters-head');
+  if (!head) return;
+  const slot = panel.ownerDocument.createElement('div');
+  slot.className = 'bbrd-workflow-slot';
+  slot.innerHTML = `
+    <div class="bbrd-filters-section">Workflow</div>
+    <label class="bbrd-ext">Show <select data-workflow aria-label="Review workflow"></select></label>
+    <button type="button" class="bbrd-workflow-open">Edit groups</button>
+    <p class="bbrd-hint">Name, colour, filter, and order. Saved for every pull request. .NET Workflow is the sample.</p>`;
+  head.insertAdjacentElement('afterend', slot);
+}
+
+/** Adds the Review path checkbox on a menu built before it existed. */
+function shapeReviewOption(panel) {
+  if (panel.querySelector('[data-filter="hideReviewGroups"]')) return;
+  const head = panel.querySelector('.bbrd-filters-head');
+  if (!head) return;
+  const label = panel.ownerDocument.createElement('label');
+  label.className = 'bbrd-check';
+  label.title = 'Hides the Review path section under the summary.';
+  label.innerHTML = '<input type="checkbox" data-filter="hideReviewGroups" /> Review path';
+  head.insertAdjacentElement('afterend', label);
+}
+
+function syncPanel(panel, settings) {
+  const review = panel.querySelector('[data-filter="hideReviewGroups"]');
+  const markdown = panel.querySelector('[data-filter="hideMarkdown"]');
+  const code = panel.querySelector('[data-filter="hideCodeComments"]');
+  const summary = panel.querySelector('[data-filter="hideSummaryComments"]');
+  const collapse = panel.querySelector('[data-filter="collapseSummaryComments"]');
+  const tests = panel.querySelector('[data-filter="hideTestFolders"]');
+  const projects = panel.querySelector('[data-filter="hideProjects"]');
+  const generated = panel.querySelector('[data-filter="hideGenerated"]');
+  const commentFiles = panel.querySelector('[data-filter="hideCommentFiles"]');
+  if (review && review.checked !== !!settings.hideReviewGroups) review.checked = !!settings.hideReviewGroups;
+  if (markdown.checked !== settings.hideMarkdown) markdown.checked = settings.hideMarkdown;
+  if (code.checked !== settings.hideCodeComments) code.checked = settings.hideCodeComments;
+  if (summary.checked !== settings.hideSummaryComments) summary.checked = settings.hideSummaryComments;
+  if (collapse) {
+    const collapseOn = settings.hideSummaryComments ? false : !!settings.collapseSummaryComments;
+    if (collapse.checked !== collapseOn) collapse.checked = collapseOn;
+    lockCollapse(pan
