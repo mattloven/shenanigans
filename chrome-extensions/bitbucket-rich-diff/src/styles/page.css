@@ -908,3 +908,141 @@ button.bbrd-test-fold {
   justify-content: flex-end;
   gap: 6px;
 }
+
+.bbrd-workflow-toolbar > [data-act='restore'] {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: -4px;
+}
+
+.bbrd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bbrd-field-label {
+  color: var(--ds-text-subtle, #505258);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.bbrd-field-error {
+  color: var(--ds-text-danger, #ae2e24);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.bbrd-workflow-editor input[type='text'],
+.bbrd-workflow-editor select {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  padding: 0 10px;
+  border: 2px solid var(--ds-border-input, #8c8f97);
+  border-radius: 6px;
+  background: var(--ds-background-input, #fff);
+  color: var(--ds-text, #292a2e);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.bbrd-workflow-editor input[type='text']:hover,
+.bbrd-workflow-editor select:hover {
+  background: var(--ds-background-input-hovered, #f7f8f9);
+}
+
+.bbrd-workflow-editor input[type='text']:focus,
+.bbrd-workflow-editor select:focus {
+  border-color: var(--ds-border-focused, #388bff);
+  background: var(--ds-background-input, #fff);
+  outline: none;
+}
+
+.bbrd-workflow-editor input[data-field='pattern'],
+.bbrd-pattern {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.bbrd-workflow-editor input[aria-invalid='true'] {
+  border-color: var(--ds-border-danger, #e2483d);
+}
+
+.bbrd-workflow-editor input[aria-invalid='true']:focus {
+  border-color: var(--ds-border-danger, #e2483d);
+  box-shadow: 0 0 0 1px var(--ds-border-danger, #e2483d);
+}
+
+.bbrd-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text, #292a2e);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bbrd-btn:focus-visible {
+  outline: 2px solid var(--ds-border-focused, #388bff);
+  outline-offset: 2px;
+}
+
+.bbrd-btn:disabled {
+  color: var(--ds-text-disabled, #a5adba);
+  cursor: default;
+}
+
+.bbrd-btn-subtle {
+  border-color: var(--ds-border, #091e4224);
+  background: var(--ds-background-neutral, #f1f2f4);
+}
+
+.bbrd-btn-subtle:hover:not(:disabled) {
+  background: var(--ds-background-neutral-hovered, #091e4224);
+}
+
+.bbrd-btn-secondary {
+  border-color: var(--ds-border, #091e4224);
+  background: var(--ds-surface, #fff);
+}
+
+.bbrd-btn-secondary:hover:not(:disabled) {
+  background: var(--ds-background-neutral-hovered, #091e4224);
+}
+
+.bbrd-btn-link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ds-link, #0c66e4);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.bbrd-btn-link:hover:not(:disabled) {
+  color: var(--ds-link-pressed, #0055cc);
+  text-decoration: underline;
+}
+
+.bbrd-btn-icon {
+  width: 28px;
+  min-height: 28px;
