@@ -324,10 +324,6 @@ a:has(> .bbrd-pill) {
   font-size: 16px;
 }
 
-.bbrd-stats-lead {
-  margin: 0 0 12px;
-  color: var(--ds-text-subtle, #505258);
-}
 
 .bbrd-stats-grid {
   display: grid;
@@ -348,9 +344,16 @@ a:has(> .bbrd-pill) {
   font-size: 16px;
 }
 
-.bbrd-stats-figure span:not(.bbrd-add):not(.bbrd-del) {
+.bbrd-stats-figure span:not(.bbrd-add):not(.bbrd-del):not(.bbrd-tick) {
   color: var(--ds-text-subtle, #505258);
   font-size: 12px;
+}
+
+.bbrd-stats-figure .bbrd-tick {
+  display: inline-flex;
+  margin-right: 4px;
+  color: #1f845a;
+  vertical-align: -3px;
 }
 
 button.bbrd-hidden-toggle,
