@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classifyDiffRows, classifySideBySideRows, commentLanguage, hiddenIntervals, scanLine, initialCommentState } from '../../src/core/comments.js';
-import { isHiddenFile, isHiddenFolder, parseExtensions, pathFromFileLink } from '../../src/core/file-filter.js';
+import { fileCategory, formatHideSummary, isHiddenFile, isHiddenFolder, parseExtensions, pathFromFileLink } from '../../src/core/file-filter.js';
 
 const both = { hideCodeComments: true, hideSummaryComments: true };
 const codeOnly = { hideCodeComments: true, hideSummaryComments: false };
@@ -173,6 +173,25 @@ describe('file filter', () => {
     expect(isHiddenFile('tmp/cache/notes.txt', { hidePattern: '(^|/)tmp(/|$)' })).toBe(true);
     expect(isHiddenFile('src/Payment.cs', { hidePattern: '[' })).toBe(false);
     expect(isHiddenFile('src/Payment.cs', { hidePattern: '' })).toBe(false);
+  });
+
+  it('classifies solution, project, generated and doc files', () => {
+    expect(fileCategory('src/Payment.sln', { hideProjects: true })).toBe('projects');
+    expect(fileCategory('src/Payment.slnx', { hideProjects: true })).toBe('projects');
+    expect(fileCategory('src/Payment.csproj', { hideProjects: true })).toBe('projects');
+    expect(fileCategory('src/App.fsproj', { hideProjects: true })).toBe('projects');
+    expect(fileCategory('src/Native.vcxproj', { hideProjects: true })).toBe('projects');
+    expect(fileCategory('src/Shared.projitems', { hideProjects: true })).toBe('projects');
+    expect(fileCategory('src/Payment.cs', { hideProjects: true })).toBe(null);
+    expect(fileCategory('src/Payment.csproj', { hideProjects: false })).toBe(null);
+    expect(fileCategory('pnpm-lock.yaml', { hideGenerated: true })).toBe('generated');
+    expect(fileCategory('src/Form.Designer.cs', { hideGenerated: true })).toBe('generated');
+    expect(fileCategory('src/api.g.cs', { hideGenerated: true })).toBe('generated');
+    expect(fileCategory('assets/app.min.js', { hideGenerated: true })).toBe('generated');
+    expect(fileCategory('docs/README.md', { hideMarkdown: true })).toBe('docs');
+    expect(fileCategory('src/Foo.Tests/Foo.csproj', { hideProjects: true, hideTestFolders: true })).toBe('projects');
+    expect(fileCategory('src/Foo.Tests/Charge.cs', { hideProjects: true, hideTestFolders: true })).toBe('tests');
+    expect(formatHideSummary({ tests: 4, projects: 1, docs: 1 }, { added: 12, removed: 3 })).toBe('6 hidden · 4 tests · 1 project · 1 doc +12 −3');
   });
 
   it('marks a folder the test-project or pattern rule hides, and leaves its parents alone', () => {
