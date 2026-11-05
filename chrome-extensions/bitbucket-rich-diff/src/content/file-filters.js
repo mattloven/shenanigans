@@ -167,4 +167,10 @@ function buildPanel() {
     <label class="bbrd-check" title="Line comments and block comments"><input type="checkbox" data-filter="hideCodeComments" /> Code comments</label>
     <label class="bbrd-check" title="C# documentation comments and JSDoc blocks. Removes them, with no section to open."><input type="checkbox" data-filter="hideSummaryComments" /> Summary comments</label>
     <label class="bbrd-check" title="Folds /// docs and /** JSDoc */ into a section. Unavailable while summary comments are hidden."><input type="checkbox" data-filter="collapseSummaryComments" /> Collapse summary comments</label>
-    <label class="bbrd-check" title="Folders ending in Tests, such as Foo.Tests an
+    <label class="bbrd-check" title="Folders ending in Tests, such as Foo.Tests and Foo.UnitTests, and every file inside them"><input type="checkbox" data-filter="hideTestFolders" /> Test projects</label>
+    <label class="bbrd-check" title="Solution files and every project type: .sln, .slnx, .csproj, .fsproj, .vbproj, .vcxproj"><input type="checkbox" data-filter="hideProjects" /> Solution and project files</label>
+    <label class="bbrd-check" title="Lockfiles, minified code, and generated source such as Designer.cs"><input type="checkbox" data-filter="hideGenerated" /> Generated files</label>
+    <label class="bbrd-check" title="A file whose only changes are comments"><input type="checkbox" data-filter="hideCommentFiles" /> Comment-only files</label>
+    <label class="bbrd-ext">Extensions <input type="text" data-filter="hiddenExtensions" placeholder="svg, lock, min.js" spellcheck="false" /></label>
+    <label class="bbrd-ext">Pattern <input type="text" data-filter="hidePattern" placeholder="\\.Tests|tmp/" spellcheck="false" /></label>
+    <p class="bbrd-hint">Regu
