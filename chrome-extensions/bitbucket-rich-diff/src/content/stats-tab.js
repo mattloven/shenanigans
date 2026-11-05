@@ -5,6 +5,7 @@ import { findTestSpans, isTestFile } from '../core/test-outline.js';
 import { findFileDiffs, getFilePath } from '../platform/bitbucket-cloud.js';
 
 const TITLE = '💩 Betterer Bit Bucket';
+const TICK = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm-.9 9.8L4.3 8l1.1-1.1 1.7 1.7 3.5-3.8 1.1 1.1z"/></svg>';
 
 const FIGURES = [
   ['files', 'Files'],
@@ -110,17 +111,17 @@ function countOf(raw) {
   return Number(raw.replaceAll(',', ''));
 }
 
-/** Bitbucket prints the pull request totals next to the "Lines updated" label in the file tree. */
+/** Bitbucket prints the pull request totals next to the "Lines updated" label in the file tree. A side of zero is left off the row. */
 function readLinesUpdated(root) {
   const heading = linesHeading(root);
   const row = heading?.parentElement?.parentElement;
   const text = (row?.textContent ?? '').replace(/\s+/g, ' ');
   const added = text.match(/\+\s*([\d,]+)/);
   const removed = text.match(/[-\u2212]\s*([\d,]+)/);
-  if (!added || !removed) return null;
+  if (!added && !removed) return null;
   return {
-    added: Number(added[1].replaceAll(',', '')),
-    removed: Number(removed[1].replaceAll(',', '')),
+    added: added ? Number(added[1].replaceAll(',', '')) : 0,
+    removed: removed ? Number(removed[1].replaceAll(',', '')) : 0,
   };
 }
 
@@ -140,12 +141,10 @@ function ensurePanel(doc) {
     const actions = doc.createElement('div');
     actions.className = 'bbrd-stats-actions';
     head.append(heading, actions);
-    const lead = doc.createElement('p');
-    lead.className = 'bbrd-stats-lead';
     const grid = doc.createElement('div');
     grid.className = 'bbrd-stats-grid';
     for (const [key, label] of FIGURES) grid.append(figure(doc, key, label));
-    panel.replaceChildren(head, lead, grid);
+    panel.replaceChildren(head, grid);
   }
   const grid = panel.querySelector('.bbrd-stats-grid');
   if (grid) {
@@ -193,7 +192,7 @@ function testsIn(article, path) {
   const language = commentLanguage(path);
   if (!language || !isTestFile(path)) return 0;
   const lines = [...article.querySelectorAll('[data-key="code-line"]')].map((row) => {
-    const cells = [...row.querySelectorAll('[data-line-type]')];
+    const cells = [...row.querySelectorAll('[data-line-type]')]);
     const cell = cells.find((item) => item.getAttribute('data-line-type') === '+')
       || cells.find((item) => item.getAttribute('data-line-type') !== ' ')
       || cells[0];
@@ -208,20 +207,24 @@ function fillPanel(panel, summary) {
   const testWord = summary.tests === 1 ? '1 test' : `${summary.tests} tests`;
   const values = {
     files: String(summary.files),
-    markdown: String(summary.markdown),
     tests: `${tests} · ${testWord}`,
     projects: String(summary.projects),
     generated: String(summary.generated),
-    comments: commentLabel(summary),
   };
   for (const [key, value] of Object.entries(values)) {
     const slot = panel.querySelector(`[data-stat="${key}"] strong`);
     if (slot && slot.textContent !== value) slot.textContent = value;
   }
+  const markdown = panel.querySelector('[data-stat="markdown"] strong');
+  const markdownCount = formatCount(summary.markdown);
+  if (markdown && markdown.textContent !== markdownCount) markdown.textContent = markdownCount;
+  const markdownCaption = panel.querySelector('[data-stat="markdown"] span');
+  const markdownLabel = summary.markdown === 1 ? 'Markdown file' : 'Markdown files';
+  if (markdownCaption && markdownCaption.textContent !== markdownLabel) markdownCaption.textContent = markdownLabel;
+  const comments = panel.querySelector('[data-stat="comments"] strong');
+  if (comments) setCommentValue(comments, summary);
   const lines = panel.querySelector('[data-stat="lines"] strong');
   if (lines) setLineCounts(lines, summary.added, summary.removed);
-  const lead = panel.querySelector('.bbrd-stats-lead');
-  if (lead) setLead(lead, summary, tests, testWord);
 }
 
 function commentLabel(summary) {
@@ -229,6 +232,29 @@ function commentLabel(summary) {
   if (summary.commentsResolved == null) return `${formatCount(summary.comments)} unresolved`;
   const total = summary.commentsResolved + summary.comments;
   return `${formatCount(summary.commentsResolved)} / ${formatCount(total)} resolved`;
+}
+
+/** Bitbucket's unresolved count is zero, so nothing is left open. */
+function commentsSettled(summary) {
+  return summary.comments === 0;
+}
+
+function setCommentValue(slot, summary) {
+  const value = commentLabel(summary);
+  const showTick = commentsSettled(summary);
+  let tick = slot.querySelector('.bbrd-tick');
+  if (showTick && !tick) {
+    tick = slot.ownerDocument.createElement('span');
+    tick.className = 'bbrd-tick';
+    tick.title = 'All comments resolved';
+    tick.innerHTML = TICK;
+    slot.prepend(tick);
+  } else if (!showTick && tick) {
+    tick.remove();
+  }
+  const text = [...slot.childNodes].find((node) => node.nodeType === Node.TEXT_NODE);
+  if (!text) slot.append(slot.ownerDocument.createTextNode(value));
+  else if (text.textContent !== value) text.textContent = value;
 }
 
 function setLineCounts(slot, added, removed) {
@@ -248,38 +274,6 @@ function setLineCounts(slot, added, removed) {
   }
   const addText = `+${formatCount(added)}`;
   const delText = `−${formatCount(removed)}`;
-  if (add.textContent !== addText) add.textContent = addText;
-  if (del.textContent !== delText) del.textContent = delText;
-}
-
-function setLead(lead, summary, tests, testWord) {
-  let add = lead.querySelector('.bbrd-add');
-  let del = lead.querySelector('.bbrd-del');
-  let prefix = lead.querySelector('[data-part="prefix"]');
-  let suffix = lead.querySelector('[data-part="suffix"]');
-  if (!add || !del || !prefix || !suffix) {
-    lead.replaceChildren();
-    prefix = lead.ownerDocument.createElement('span');
-    prefix.dataset.part = 'prefix';
-    add = lead.ownerDocument.createElement('span');
-    add.className = 'bbrd-add';
-    del = lead.ownerDocument.createElement('span');
-    del.className = 'bbrd-del';
-    suffix = lead.ownerDocument.createElement('span');
-    suffix.dataset.part = 'suffix';
-    lead.append(prefix, add, lead.ownerDocument.createTextNode(' '), del, suffix);
-  }
-  const commentText = summary.comments == null
-    ? ''
-    : summary.commentsResolved == null
-      ? `, ${formatCount(summary.comments)} unresolved ${summary.comments === 1 ? 'comment' : 'comments'}`
-      : `, ${formatCount(summary.commentsResolved)} / ${formatCount(summary.commentsResolved + summary.comments)} resolved`;
-  const prefixText = `${summary.files} files changed, `;
-  const suffixText = `. ${summary.markdown} markdown, ${tests} with ${testWord}${commentText}.`;
-  const addText = summary.added == null ? '' : `+${formatCount(summary.added)}`;
-  const delText = summary.removed == null ? '' : `−${formatCount(summary.removed)}`;
-  if (prefix.textContent !== prefixText) prefix.textContent = prefixText;
-  if (suffix.textContent !== suffixText) suffix.textContent = suffixText;
   if (add.textContent !== addText) add.textContent = addText;
   if (del.textContent !== delText) del.textContent = delText;
 }
