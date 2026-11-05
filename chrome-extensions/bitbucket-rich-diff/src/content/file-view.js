@@ -1,4 +1,5 @@
 import DOMPurify from 'dompurify';
+import { formatCount } from '../core/file-filter.js';
 import { VIEWS } from '../core/file-types.js';
 import { buildView, errorHtml } from './build-view.js';
 import { getContent, getHeader } from '../platform/bitbucket-cloud.js';
@@ -178,10 +179,10 @@ export class FileView {
     if (built.stats) {
       const { added, removed, modified } = built.stats;
       parts.push(
-        `<span class="stats" aria-label="${added} added, ${removed} removed, ${modified} changed">` +
-          `<span class="chip chip--ins${added ? '' : ' is-zero'}" title="Added">+${added}</span>` +
-          `<span class="chip chip--del${removed ? '' : ' is-zero'}" title="Removed">−${removed}</span>` +
-          `<span class="chip chip--mod${modified ? '' : ' is-zero'}" title="Changed">~${modified}</span></span>`,
+        `<span class="stats" aria-label="${formatCount(added)} added, ${formatCount(removed)} removed, ${formatCount(modified)} changed">` +
+          `<span class="chip chip--ins${added ? '' : ' is-zero'}" title="Added">+${formatCount(added)}</span>` +
+          `<span class="chip chip--del${removed ? '' : ' is-zero'}" title="Removed">−${formatCount(removed)}</span>` +
+          `<span class="chip chip--mod${modified ? '' : ' is-zero'}" title="Changed">~${formatCount(modified)}</span></span>`,
       );
     }
     for (const note of built.notes) parts.push(`<span class="note">${escapeText(note)}</span>`);
