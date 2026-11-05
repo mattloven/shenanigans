@@ -210,4 +210,25 @@ describe('mock pull request', () => {
   });
 
   it('handles added, deleted and invalid files', async () => {
-    assert.equal(await article('docs/onboarding.md').locator('.note').textCon
+    assert.equal(await article('docs/onboarding.md').locator('.note').textContent(), 'New file');
+    assert.equal(await article('docs/onboarding.md').locator('.bbrd-blk--ins').count(), 3);
+    assert.equal(await article('docs/legacy.md').locator('.bbrd-blk--del h1').textContent(), 'Legacy');
+    await article('docs/legacy.md').locator('.bbrd-tab[data-view="preview"]').click();
+    assert.equal(await article('docs/legacy.md').locator('.markdown-body h1').textContent(), 'Legacy');
+    assert.equal(await article('docs/legacy.md').locator('.seg-btn[aria-checked="true"]').textContent(), 'Old');
+    const broken = article('config/broken.json');
+    assert.match(await broken.locator('.bbrd-error').textContent(), /new version is not valid JSON/);
+    await broken.locator('[data-action="show-diff"]').click();
+    assert.equal(await broken.getAttribute('data-bbrd-view'), 'diff');
+  });
+
+  it('hides markdown and chosen extensions from the file list and the diff', async () => {
+    assert.equal(await page.locator('.bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.sidebar .bbrd-filters').count(), 0);
+    assert.equal(await page.locator('.bbrd-stats-actions .bbrd-menu-host').count(), 1);
+    assert.equal(await page.locator('.diff-bar .bbrd-menu-host').count(), 0);
+    const panel = await openHideMenu();
+    await panel.getByLabel('Markdown files').check();
+    assert.equal(await article('README.md').isVisible(), false);
+    assert.equal(await article('docs/onboarding.md').isVisible(), false);
+    assert.equal(await page.locator('a[href="#chg-REA
