@@ -110,4 +110,109 @@ describe('mock pull request', () => {
     await readme.getByLabel('Only changes').check();
     const fold = readme.locator('.bbrd-fold-toggle:visible');
     assert.equal(await fold.textContent(), 'Show 7 unchanged sections');
-    assert.equal(await article('pack
+    assert.equal(await article('package.json').getByLabel('Only changes').isChecked(), true, 'applies to other files');
+    await shot('mock-readme-final-text-only-changes', readme);
+    await fold.click();
+    assert.equal(await readme.locator('.bbrd-fold-toggle:visible').count(), 0);
+
+    await page.reload();
+    await article('README.md').locator('.markdown-body').waitFor();
+    assert.equal(await article('README.md').getByLabel('Show deletions').isChecked(), false, 'persisted');
+    await article('README.md').getByLabel('Show deletions').check();
+    await article('README.md').getByLabel('Only changes').uncheck();
+  });
+
+  it('switches to Preview and back to the standard Diff without collapsing the file', async () => {
+    const readme = article('README.md');
+    await readme.locator('.bbrd-tab[data-view="preview"]').click();
+    assert.deepEqual(await readme.locator('.markdown-body h1').allTextContents(), ['Payments Service', 'Payments Service']);
+    assert.equal(await readme.locator('.markdown-body del, .markdown-body ins').count(), 0);
+    await readme.locator('.bbrd-tab[data-view="diff"]').click();
+    assert.equal(await readme.locator('[data-qa="bk-file__content"]').isVisible(), true);
+    assert.equal(await readme.locator('.bbrd-host').isVisible(), false);
+    assert.equal(await readme.evaluate((a) => a.classList.contains('collapsed')), false);
+    await readme.locator('.bbrd-tab[data-view="changes"]').click();
+  });
+
+  it('previews old and new side by side with aligned sections, or one at a time', async () => {
+    const readme = article('README.md');
+    await readme.locator('.bbrd-tab[data-view="preview"]').click();
+    assert.equal(await readme.locator('.seg-btn[aria-checked="true"]').textContent(), 'Side by side');
+    const oldHeading = readme.locator('.cmp-cell--old h2', { hasText: 'Configuration' });
+    const newHeading = readme.locator('.cmp-cell--new h2', { hasText: 'Configuration' });
+    const [a, b] = [await oldHeading.boundingBox(), await newHeading.boundingBox()];
+    assert.ok(Math.abs(a.y - b.y) < 1, `sections aligned (${a.y} vs ${b.y})`);
+    assert.ok(b.x > a.x + 200, 'new version is to the right');
+    await shot('mock-readme-preview-side-by-side', readme);
+
+    await readme.locator('.seg-btn[data-layout="old"]').click();
+    assert.equal(await readme.locator('.cmp-cell--new p:visible').count(), 0);
+    assert.equal(await readme.locator('.cmp-cell--old p', { hasText: 'three regions' }).isVisible(), true);
+    await readme.locator('.seg-btn[data-layout="new"]').click();
+    assert.equal(await readme.locator('.cmp-cell--old p:visible').count(), 0);
+    assert.equal(await readme.locator('input[type="checkbox"].task-list-item-checkbox:visible').count(), 4);
+
+    await page.reload();
+    await article('README.md').locator('.bbrd-tab[data-view="preview"]').click();
+    assert.equal(await article('README.md').locator('.seg-btn[aria-checked="true"]').textContent(), 'New', 'layout persisted');
+    await article('README.md').locator('.seg-btn[data-layout="split"]').click();
+    await article('README.md').locator('.bbrd-tab[data-view="changes"]').click();
+  });
+
+  it('mirrors JSON tree expansion across side-by-side panes', async () => {
+    const pkg = article('package.json');
+    await pkg.locator('.bbrd-tab[data-view="preview"]').click();
+    const flags = (side) => pkg.locator(`.cmp-pane--${side} summary[data-path="featureFlags[0]"]`);
+    await flags('old').click();
+    assert.equal(await flags('new').evaluate((s) => s.parentElement.open), true);
+    await pkg.locator('.bbrd-tab[data-view="changes"]').click();
+  });
+
+  it('supports keyboard navigation between tabs', async () => {
+    const readme = article('README.md');
+    await readme.locator('.bbrd-tab[data-view="changes"]').focus();
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await readme.getAttribute('data-bbrd-view'), 'preview');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await readme.getAttribute('data-bbrd-view'), 'changes');
+  });
+
+  it('renders a structural JSON diff with a jumpable summary', async () => {
+    const pkg = article('package.json');
+    await pkg.locator('.jd-summary').waitFor();
+    const paths = await pkg.locator('.jd-sum-path').allTextContents();
+    assert.deepEqual(paths, [
+      'version',
+      'scripts.test',
+      'scripts.typecheck',
+      'dependencies.express',
+      'dependencies.request',
+      'dependencies.undici',
+      'regions[2]',
+      'featureFlags[0].enabled',
+      'featureFlags[0].rollout',
+      'engines.node',
+    ]);
+    assert.equal(await pkg.locator('[data-path="engines.node"] ins').textContent(), '">=20"');
+    await pkg.locator('.jd-sum-row', { hasText: 'featureFlags[0].rollout' }).click();
+    assert.equal(await pkg.locator('[data-path="featureFlags[0].rollout"]').isVisible(), true);
+    await shot('mock-package-json-rich-diff', pkg);
+  });
+
+  it('shows a JSON tree preview with expand/collapse all', async () => {
+    const pkg = article('package.json');
+    await pkg.locator('.bbrd-tab[data-view="preview"]').click();
+    await pkg.locator('[data-action="collapse"]').click();
+    assert.equal(await pkg.locator('details[open]').count(), 0);
+    await pkg.locator('[data-action="expand"]').click();
+    assert.ok((await pkg.locator('details[open]').count()) > 5);
+    await pkg.locator('.bbrd-tab[data-view="changes"]').click();
+  });
+
+  it('handles added, deleted and invalid files', async () => {
+    assert.equal(await article('docs/onboarding.md').locator('.note').textContent(), 'New file');
+    assert.equal(await article('docs/onboarding.md').locator('.bbrd-blk--ins').count(), 3);
+    assert.equal(await article('docs/legacy.md').locator('.bbrd-blk--del h1').textContent(), 'Legacy');
+    await article('docs/legacy.md').locator('.bbrd-tab[data-view="preview"]').click();
+    assert.equal(await article('docs/legacy.md').locator('.markdown-body h1').textContent(), 'Legacy');
+    assert.equal(await article('docs/legacy.md').locator('.seg-btn[aria-checked="true"]').te
