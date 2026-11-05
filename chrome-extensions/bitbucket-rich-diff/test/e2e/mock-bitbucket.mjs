@@ -135,6 +135,8 @@ function pageHtml() {
     .hunk { background: #f1f2f4; color: #626f86; padding: 2px 8px; }
   </style></head><body>
     <div class="top">acme / payments — Pull request #42: Payments docs refresh</div>
+    <nav class="repo-nav" aria-label="Repository"><a href="/acme/payments/src">Source</a><a href="/acme/payments/commits">Commits</a><a href="/acme/payments/branches">Branches</a></nav>
+    <nav aria-label="Pull request"><div class="pr-tabs" role="tablist"><a role="tab" href="/acme/payments/pull-requests/42/overview">Overview</a><a role="tab" href="/acme/payments/pull-requests/42/diff" aria-current="page">Files changed</a><a role="tab" href="/acme/payments/pull-requests/42/commits">Commits</a></div></nav>
     <div class="page">
       <aside class="sidebar"><div class="sidebar-head"><span data-qa="files-changed-count">${MOCK_FILES.length} files changed</span><button type="button">Filter files</button></div><ul role="list" id="file-list"></ul></aside>
       <div class="scroller">
