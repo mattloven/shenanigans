@@ -115,7 +115,9 @@ export class RichDiffApp {
   }
 
   persistSetting(key, value) {
-    this.settings = { ...this.settings, [key]: value };
+    const next = { ...this.settings, [key]: value };
+    if (next.hideSummaryComments) next.collapseSummaryComments = false;
+    this.settings = next;
     for (const view of this.views.values()) view.applySettings(this.settings);
     this.applyPageFilters();
     saveSettings(this.settings);

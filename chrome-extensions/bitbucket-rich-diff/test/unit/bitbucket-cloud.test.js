@@ -122,6 +122,7 @@ describe('detectFileType', () => {
 describe('normalizeSettings', () => {
   it('fills defaults and drops invalid values', () => {
     expect(normalizeSettings(undefined)).toEqual(DEFAULT_SETTINGS);
+    expect(normalizeSettings({ hideSummaryComments: true, collapseSummaryComments: true }).collapseSummaryComments).toBe(false);
     expect(normalizeSettings({ markdown: { enabled: false, defaultView: 'bogus' }, onlyChanges: 'yes' })).toEqual({
       ...DEFAULT_SETTINGS,
       markdown: { enabled: false, defaultView: 'changes' },

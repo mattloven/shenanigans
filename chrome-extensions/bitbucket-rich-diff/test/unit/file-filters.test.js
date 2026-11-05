@@ -41,6 +41,8 @@ describe('mountFileFilters', () => {
     expect(document.querySelector('.bbrd-filters').parentElement).toBe(document.body);
     expect(document.querySelector('.bbrd-filters').hidden).toBe(true);
     expect(document.querySelector('.bbrd-filters-head').textContent.trim()).toBe('Hide');
+    expect(document.querySelector('.bbrd-comment-explain')).toBeNull();
+    expect(document.querySelector('[data-filter="collapseSummaryComments"]').closest('label').textContent).toMatch(/Collapse summary comments/);
     expect(document.querySelector('.bbrd-filters').lastElementChild.classList.contains('bbrd-filters-foot')).toBe(true);
     expect(document.querySelector('.bbrd-filters-foot').hidden).toBe(true);
     expect(document.querySelector('.bbrd-stats-actions').contains(document.querySelector('.bbrd-menu-host'))).toBe(true);
@@ -97,6 +99,25 @@ describe('mountFileFilters', () => {
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(panel.hidden).toBe(true);
     expect(button.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('unchecks and disables collapse while summary comments are hidden', () => {
+    const onChange = vi.fn();
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, hideSummaryComments: true, collapseSummaryComments: true }, onChange);
+    const collapse = document.querySelector('[data-filter="collapseSummaryComments"]');
+    expect(collapse.checked).toBe(false);
+    expect(collapse.disabled).toBe(true);
+    expect(collapse.closest('label').classList.contains('bbrd-check-disabled')).toBe(true);
+
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, collapseSummaryComments: true }, onChange);
+    const hide = document.querySelector('[data-filter="hideSummaryComments"]');
+    expect(collapse.disabled).toBe(false);
+    expect(collapse.checked).toBe(true);
+    hide.checked = true;
+    hide.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(collapse.checked).toBe(false);
+    expect(collapse.disabled).toBe(true);
+    expect(onChange).toHaveBeenCalledWith('hideSummaryComments', true);
   });
 
   it('hides matching files and keeps Show/Hide in the flyout, never the file tree', () => {
