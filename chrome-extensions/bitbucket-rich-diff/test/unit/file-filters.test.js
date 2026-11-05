@@ -11,6 +11,7 @@ function installPage() {
         <li><a href="#chg-src/App.cs">src/App.cs <span class="stat">2 lines added</span></a></li>
       </ul>
     </aside>
+    <section class="bbrd-stats"><div class="bbrd-stats-actions"></div></section>
     <div class="toolbar"><div class="right">
       <span data-qa="files-viewed-count">0 of 2 files viewed</span>
       <button type="button"><span>Global diff settings</span></button>
@@ -19,17 +20,13 @@ function installPage() {
     <article data-qa="branch-diff-file" aria-label="Diff of file src/App.cs"></article>`;
 }
 
-function cogs() {
-  return [...document.querySelectorAll('button')].filter((button) => (button.textContent || '').includes('Global diff settings') && !button.closest('.bbrd-menu-host'));
-}
-
 describe('mountFileFilters', () => {
   beforeEach(() => {
     resetHiddenReveal();
     installPage();
   });
 
-  it('puts one menu beside the cog and drops copies left in the file list', () => {
+  it('puts one menu in the summary bar and drops copies left in the file list', () => {
     const stray = document.createElement('div');
     stray.className = 'bbrd-filters';
     document.querySelector('ul').before(stray);
@@ -43,25 +40,43 @@ describe('mountFileFilters', () => {
     expect(document.body.contains(stray)).toBe(false);
     expect(document.querySelector('.bbrd-filters').parentElement).toBe(document.body);
     expect(document.querySelector('.bbrd-filters').hidden).toBe(true);
-    expect(document.querySelector('.bbrd-menu-host').nextElementSibling).toBe(cogs()[0]);
+    expect(document.querySelector('.bbrd-filters-head').textContent.trim()).toBe('Hide');
+    expect(document.querySelector('.bbrd-filters').lastElementChild.classList.contains('bbrd-filters-foot')).toBe(true);
+    expect(document.querySelector('.bbrd-filters-foot').hidden).toBe(true);
+    expect(document.querySelector('.bbrd-stats-actions').contains(document.querySelector('.bbrd-menu-host'))).toBe(true);
+    expect(document.querySelector('.toolbar .bbrd-menu-host')).toBeNull();
     expect(document.querySelector('.sidebar .bbrd-filters')).toBeNull();
   });
 
-  it('moves the same menu when Bitbucket leaves the old toolbar in the page', () => {
+  it('moves the same menu when the summary bar is re-rendered', () => {
     const onChange = vi.fn();
     mountFileFilters(document, DEFAULT_SETTINGS, onChange);
 
-    const right = document.querySelector('.right');
-    const fresh = right.cloneNode(true);
-    fresh.querySelector('.bbrd-menu-host')?.remove();
-    right.after(fresh);
+    const fresh = document.createElement('div');
+    fresh.className = 'bbrd-stats-actions';
+    document.querySelector('.bbrd-stats-actions').replaceWith(fresh);
     mountFileFilters(document, DEFAULT_SETTINGS, onChange);
     mountFileFilters(document, DEFAULT_SETTINGS, onChange);
 
-    const visibleCogs = cogs();
     expect(document.querySelectorAll('.bbrd-menu-host')).toHaveLength(1);
     expect(document.querySelectorAll('.bbrd-filters')).toHaveLength(1);
-    expect(document.querySelector('.bbrd-menu-host').nextElementSibling).toBe(visibleCogs[visibleCogs.length - 1]);
+    expect(fresh.contains(document.querySelector('.bbrd-menu-host'))).toBe(true);
+    expect(document.querySelector('.toolbar .bbrd-menu-host')).toBeNull();
+  });
+
+  it('moves a summary that is still in the heading down to the bottom', () => {
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, hideMarkdown: true }, vi.fn());
+    const foot = document.querySelector('.bbrd-filters-foot');
+    foot.classList.remove('bbrd-filters-foot');
+    foot.classList.add('bbrd-hidden-actions');
+    document.querySelector('.bbrd-filters-head').append(foot);
+
+    mountFileFilters(document, { ...DEFAULT_SETTINGS, hideMarkdown: true }, vi.fn());
+
+    const moved = document.querySelector('.bbrd-filters-foot');
+    expect(document.querySelector('.bbrd-filters').lastElementChild).toBe(moved);
+    expect(document.querySelector('.bbrd-filters-head').textContent.trim()).toBe('Hide');
+    expect(moved.querySelector('.bbrd-hidden-count').textContent).toMatch(/hidden/);
   });
 
   it('opens from the button, closes on an outside click, and saves a change', () => {
@@ -91,7 +106,9 @@ describe('mountFileFilters', () => {
     expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(true);
     expect(document.querySelector('article[aria-label="Diff of file README.md"]').classList.contains('bbrd-file-hidden')).toBe(true);
     expect(document.querySelector('a[href="#chg-src/App.cs"]').closest('li').classList.contains('bbrd-file-hidden')).toBe(false);
-    expect(document.querySelector('.bbrd-hidden-count').textContent).toBe('1 hidden · 1 doc +3 −1');
+    expect(document.querySelector('.bbrd-filters-foot .bbrd-hidden-count').textContent).toBe('1 hidden · 1 doc +3 −1');
+    expect(document.querySelector('.bbrd-filters-foot').hidden).toBe(false);
+    expect(document.querySelector('.bbrd-filters-head').contains(document.querySelector('.bbrd-hidden-count'))).toBe(false);
     expect(document.querySelectorAll('.bbrd-hidden-bar')).toHaveLength(0);
     expect(document.querySelector('.sidebar .bbrd-hidden-toggle')).toBeNull();
     expect(document.querySelector('.bbrd-filters .bbrd-hidden-toggle').hidden).toBe(false);
@@ -178,6 +195,7 @@ describe('mountFileFilters', () => {
           <li><a href="#chg-src/App.cs">App.cs</a></li>
         </ul>
       </aside>
+      <section class="bbrd-stats"><div class="bbrd-stats-actions"></div></section>
       <span data-qa="files-viewed-count">0 of 2 files viewed</span>
       <button type="button"><span>Global diff settings</span></button>
       <article data-qa="branch-diff-file" aria-label="Diff of file src/Payment.Tests/ChargeTests.cs"></article>
