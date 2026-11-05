@@ -158,6 +158,8 @@ function foldCommentRuns(article, path) {
     const open = openCommentFolds.has(key);
     fold.setAttribute('aria-expanded', open ? 'true' : 'false');
     setCommentOpen(run, open);
+    // Focusing the bar scrolls it into view and fights the wheel gesture.
+    fold.addEventListener('mousedown', (event) => event.preventDefault());
     fold.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
