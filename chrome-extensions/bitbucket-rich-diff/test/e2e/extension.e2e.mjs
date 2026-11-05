@@ -134,4 +134,47 @@ describe('mock pull request', () => {
     await readme.locator('.bbrd-tab[data-view="changes"]').click();
   });
 
-  it('previews old and new side by side with aligned sections, or one at a time', a
+  it('previews old and new side by side with aligned sections, or one at a time', async () => {
+    const readme = article('README.md');
+    await readme.locator('.bbrd-tab[data-view="preview"]').click();
+    assert.equal(await readme.locator('.seg-btn[aria-checked="true"]').textContent(), 'Side by side');
+    const oldHeading = readme.locator('.cmp-cell--old h2', { hasText: 'Configuration' });
+    const newHeading = readme.locator('.cmp-cell--new h2', { hasText: 'Configuration' });
+    const [a, b] = [await oldHeading.boundingBox(), await newHeading.boundingBox()];
+    assert.ok(Math.abs(a.y - b.y) < 1, `sections aligned (${a.y} vs ${b.y})`);
+    assert.ok(b.x > a.x + 200, 'new version is to the right');
+    await shot('mock-readme-preview-side-by-side', readme);
+
+    await readme.locator('.seg-btn[data-layout="old"]').click();
+    assert.equal(await readme.locator('.cmp-cell--new p:visible').count(), 0);
+    assert.equal(await readme.locator('.cmp-cell--old p', { hasText: 'three regions' }).isVisible(), true);
+    await readme.locator('.seg-btn[data-layout="new"]').click();
+    assert.equal(await readme.locator('.cmp-cell--old p:visible').count(), 0);
+    assert.equal(await readme.locator('input[type="checkbox"].task-list-item-checkbox:visible').count(), 4);
+
+    await page.reload();
+    await article('README.md').locator('.bbrd-tab[data-view="preview"]').click();
+    assert.equal(await article('README.md').locator('.seg-btn[aria-checked="true"]').textContent(), 'New', 'layout persisted');
+    await article('README.md').locator('.seg-btn[data-layout="split"]').click();
+    await article('README.md').locator('.bbrd-tab[data-view="changes"]').click();
+  });
+
+  it('mirrors JSON tree expansion across side-by-side panes', async () => {
+    const pkg = article('package.json');
+    await pkg.locator('.bbrd-tab[data-view="preview"]').click();
+    const flags = (side) => pkg.locator(`.cmp-pane--${side} summary[data-path="featureFlags[0]"]`);
+    await flags('old').click();
+    assert.equal(await flags('new').evaluate((s) => s.parentElement.open), true);
+    await pkg.locator('.bbrd-tab[data-view="changes"]').click();
+  });
+
+  it('supports keyboard navigation between tabs', async () => {
+    const readme = article('README.md');
+    await readme.locator('.bbrd-tab[data-view="changes"]').focus();
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await readme.getAttribute('data-bbrd-view'), 'preview');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await readme.getAttribute('data-bbrd-view'), 'changes');
+  });
+
+  it('rende
