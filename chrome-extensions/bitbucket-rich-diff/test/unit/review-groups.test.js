@@ -39,3 +39,53 @@ describe('review path actions', () => {
 
   it('picks the first group that still has a file to view', () => {
     expect(firstUnfinishedGroup([
+      { group: 'infrastructure', count: 2, viewed: 2 },
+      { group: 'business', count: 4, viewed: 1 },
+      { group: 'tests', count: 0, viewed: 0 },
+      { group: 'docs', count: 1, viewed: 0 },
+    ])).toBe('business');
+    expect(firstUnfinishedGroup([
+      { group: 'infrastructure', count: 1, viewed: 1 },
+      { group: 'business', count: 1, viewed: 1 },
+      { group: 'tests', count: 0, viewed: 0 },
+      { group: 'docs', count: 1, viewed: 1 },
+    ])).toBeNull();
+  });
+});
+
+describe('parseReviewedState', () => {
+  it('reads a path map, a reviewed object, and a list', () => {
+    expect([...parseReviewedState('{"src/App.cs":true,"src/Skip.cs":false}')]).toEqual(['src/App.cs']);
+    expect([...parseReviewedState('{"src/App.cs":{"reviewed":true}}')]).toEqual(['src/App.cs']);
+    expect([...parseReviewedState('["/src/App.cs"]')]).toEqual(['src/App.cs']);
+    expect(parseReviewedState('{}').size).toBe(0);
+    expect(parseReviewedState('not json').size).toBe(0);
+  });
+});
+
+describe('mountReviewGroups', () => {
+  beforeEach(() => resetReviewGroup());
+
+  it('filters the file list to the clicked group and turns a fully viewed group green', () => {
+    document.body.innerHTML = `
+      <section class="bbrd-stats"></section>
+      <ul id="file-tree">
+        <li>
+          <button type="button"><span aria-label="Directory"></span><span>src</span></button>
+          <ul>
+            <li><a href="#chg-src/App.cs">App.cs</a></li>
+            <li><a href="#chg-src/appsettings.json">appsettings.json <span>+</span><span>12</span><span>12 lines added, 2 lines removed</span></a></li>
+            <li><a href="#chg-package-lock.json"><span>+</span><span>4,865</span><span>4,865 lines added</span></a></li>
+            <li><a href="#chg-src/Note.cs"><span>+</span><span>22</span><span>22 lines added</span></a></li>
+          </ul>
+        </li>
+        <li><a href="#chg-README.md">README.md</a></li>
+      </ul>
+      <article data-qa="branch-diff-file" aria-label="Diff of file src/App.cs">
+        <div data-qa="bk-file__header"><input type="checkbox" checked /></div>
+      </article>
+      <article data-qa="branch-diff-file" aria-label="Diff of file README.md"></article>`;
+    const storage = { getItem: () => '{"README.md":true,"src/Note.cs":true}' };
+    const pr = { workspace: 'acme', repo: 'payments', prId: 7 };
+
+    mountReviewGroups(document, pr, storage);
