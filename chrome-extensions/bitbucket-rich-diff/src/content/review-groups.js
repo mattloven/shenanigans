@@ -109,4 +109,56 @@ function wireGroupBar(bar) {
     const node = event.target;
     const target = node && node.nodeType === 1 ? node : node?.parentElement;
     if (!target || typeof target.closest !== 'function') return;
-    const but
+    const button = target.closest('.bbrd-group');
+    if (!button || button.tagName !== 'BUTTON' || !bar.contains(button)) return;
+    if (button.disabled || !lastMount) return;
+    const id = button.dataset.group;
+    if (!id) return;
+    activeGroup = activeGroup === id ? null : id;
+    mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
+    bar.ownerDocument.dispatchEvent(new CustomEvent('bbrd-review-group'));
+  });
+}
+
+/**
+ * @param {HTMLElement | null} bar
+ * @param {import('../core/review-workflows.js').WorkflowGroup} group
+ * @param {import('../core/review-workflows.js').ReviewFilter[]} filters
+ * @param {number} count
+ * @param {number} viewed
+ * @param {number} added
+ * @param {number} removed
+ */
+function paintGroup(bar, group, filters, count, viewed, added, removed) {
+  if (!bar) return;
+  let button = bar.querySelector(`[data-group="${group.id}"]`);
+  if (!button || button.tagName !== 'BUTTON') {
+    button = bar.ownerDocument.createElement('button');
+    button.type = 'button';
+    button.className = 'bbrd-group';
+    button.dataset.group = group.id;
+    button.innerHTML = '<span class="bbrd-group-name"></span><span class="bbrd-group-state">Showing</span><span class="bbrd-group-count"></span><span class="bbrd-group-lines"><span class="bbrd-add"></span> <span class="bbrd-del"></span></span><span class="bbrd-group-meter" aria-hidden="true"><span></span></span><span class="bbrd-group-viewed"></span>';
+    bar.append(button);
+  }
+  const done = count > 0 && viewed === count;
+  button.disabled = count === 0;
+  const saved = filters.find((filter) => filter.id === group.filterId);
+  button.title = saved ? `${saved.name}: ${saved.pattern}` : 'Remaining files';
+  button.setAttribute('aria-pressed', activeGroup === group.id ? 'true' : 'false');
+  button.dataset.done = done ? 'true' : 'false';
+  button.style.setProperty('--bbrd-group-ink', done ? '#216e4e' : group.color);
+  button.style.setProperty('--bbrd-group', done ? '#dcfff1' : `color-mix(in srgb, ${group.color} 16%, #fff)`);
+  button.style.setProperty('--bbrd-group-selected', done ? '#dcfff1' : `color-mix(in srgb, ${group.color} 22%, #fff)`);
+  const name = button.querySelector('.bbrd-group-name');
+  const tally = button.querySelector('.bbrd-group-count');
+  const progress = button.querySelector('.bbrd-group-viewed');
+  const fill = button.querySelector('.bbrd-group-meter span');
+  const addedNode = button.querySelector('.bbrd-add');
+  const removedNode = button.querySelector('.bbrd-del');
+  const countText = `${formatCount(count)} ${count === 1 ? 'file' : 'files'}`;
+  const viewedText = done ? 'Done' : `${formatCount(viewed)} viewed`;
+  const addedText = `+${formatCount(added)}`;
+  const removedText = `−${formatCount(removed)}`;
+  if (name && name.textContent !== group.name) name.textContent = group.name;
+  if (tally && tally.textContent !== countText) tally.textContent = countText;
+  if (progress && progress.textContent !== viewedText) progres
