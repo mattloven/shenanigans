@@ -2,7 +2,9 @@ import { createUrlResolver } from '../platform/bitbucket-cloud.js';
 
 /**
  * Per-pull-request data access with caching. Diffstat is fetched once per PR view; file
- * contents are cached per revision URL.
+ * contents are cached per revision URL. Built rich views are cached per path, view, and
+ * content hash for the page session so MutationObserver remounts can reattach without
+ * re-diffing.
  */
 export class PrContext {
   /**
@@ -18,11 +20,14 @@ export class PrContext {
     this.texts = new Map();
     /** @type {Map<string, import('../core/file-types.js').ViewId>} view chosen per file this session */
     this.chosenViews = new Map();
+    /** @type {Map<string, import('./build-view.js').BuiltView>} */
+    this.viewCache = new Map();
   }
 
   refresh() {
     this.diffstat = null;
     this.texts.clear();
+    this.viewCache.clear();
   }
 
   async findEntry(path) {
@@ -65,4 +70,46 @@ export class PrContext {
       resolveNewUrl: createUrlResolver(entry.new, this.origin),
     };
   }
+
+  /** @param {string | null | undefined} oldText @param {string | null | undefined} newText */
+  contentHash(oldText, newText) {
+    return `${oldText?.length ?? 'n'}:${fingerprint(oldText)}:${newText?.length ?? 'n'}:${fingerprint(newText)}`;
+  }
+
+  viewCacheKey(path, view, hash) {
+    return `${path}\0${view}\0${hash}`;
+  }
+
+  /**
+   * @param {string} path
+   * @param {string} view
+   * @param {{ oldText: string | null, newText: string | null }} data
+   * @returns {import('./build-view.js').BuiltView | null}
+   */
+  getCachedView(path, view, data) {
+    return this.viewCache.get(this.viewCacheKey(path, view, this.contentHash(data.oldText, data.newText))) ?? null;
+  }
+
+  /**
+   * @param {string} path
+   * @param {string} view
+   * @param {{ oldText: string | null, newText: string | null }} data
+   * @param {import('./build-view.js').BuiltView} built
+   */
+  setCachedView(path, view, data, built) {
+    this.viewCache.set(this.viewCacheKey(path, view, this.contentHash(data.oldText, data.newText)), built);
+  }
+}
+
+/** Cheap content fingerprint for session cache keys (not cryptographic). */
+function fingerprint(text) {
+  if (text == null) return 'null';
+  let hash = 2166136261;
+  const step = Math.max(1, Math.floor(text.length / 4096));
+  for (let i = 0; i < text.length; i += step) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  hash ^= text.length;
+  return (hash >>> 0).toString(36);
 }
