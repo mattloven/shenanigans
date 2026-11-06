@@ -13,13 +13,19 @@ fs.mkdirSync(outdir, { recursive: true });
 const copies = [
   ['src/manifest.json', 'manifest.json'],
   ['src/styles/page.css', 'page.css'],
+  ['src/styles/page-groups.css', 'page-groups.css'],
+  ['src/styles/page-folds.css', 'page-folds.css'],
   ['src/options/options.html', 'options.html'],
   ['src/options/options.css', 'options.css'],
   ['assets/icons', 'icons'],
 ];
 
 function copyStatic() {
-  for (const [from, to] of copies) fs.cpSync(path.join(root, from), path.join(outdir, to), { recursive: true });
+  for (const [from, to] of copies) {
+    const full = path.join(root, from);
+    if (!fs.existsSync(full)) continue;
+    fs.cpSync(full, path.join(outdir, to), { recursive: true });
+  }
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const manifestPath = path.join(outdir, 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
