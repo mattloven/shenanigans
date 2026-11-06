@@ -63,4 +63,113 @@ export function scanLine(line, state, language) {
   if (language === 'xml') return scanXmlLine(line, state);
   if (language === 'hash' || language === 'yaml') return scanHashLine(line, state);
   if (language === 'jsonc') return scanSlashLine(line, state, { summaryDocs: false, hash: false, jsRegex: false, jsTemplate: false, cs: false });
-  if (language === 'h
+  if (language === 'hcl') return scanSlashLine(line, state, { summaryDocs: false, hash: true, jsRegex: false, jsTemplate: false, cs: false });
+  if (language === 'js') return scanSlashLine(line, state, { summaryDocs: true, hash: false, jsRegex: true, jsTemplate: true, cs: false });
+  if (language === 'cs') return scanSlashLine(line, state, { summaryDocs: true, hash: false, jsRegex: false, jsTemplate: false, cs: true });
+  return assertNever(language);
+}
+
+/**
+ * Shared scanner for languages whose comments use // and block comments (and optionally #).
+ * @param {string} line
+ * @param {{ stack: Frame[] }} state
+ * @param {{ summaryDocs: boolean, hash: boolean, jsRegex: boolean, jsTemplate: boolean, cs: boolean }} opts
+ */
+function scanSlashLine(line, state, opts) {
+  const stack = state.stack.map((frame) => ({ ...frame }));
+  /** @type {{ start: number, end: number, kind: CommentKind }[]} */
+  const ranges = [];
+  let index = 0;
+  let kind = kindOf(stack);
+  let start = 0;
+
+  const sync = (next) => {
+    const nextKind = kindOf(stack);
+    if (nextKind !== kind) {
+      if (next > start) ranges.push({ start, end: next, kind });
+      start = next;
+      kind = nextKind;
+    }
+    index = next;
+  };
+
+  while (index < line.length) {
+    const top = stack[stack.length - 1];
+    const ch = line[index];
+    const next = line[index + 1];
+
+    if (top.mode === 'block') {
+      if (ch === '*' && next === '/') {
+        index += 2;
+        stack.pop();
+        sync(index);
+      } else {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (top.mode === 'string' || top.mode === 'template') {
+      if (ch === '\\' && !top.verbatim) {
+        index += 2;
+        continue;
+      }
+      if (top.verbatim && ch === '"') {
+        if (next === '"') {
+          index += 2;
+          continue;
+        }
+        index += 1;
+        stack.pop();
+        sync(index);
+        continue;
+      }
+      if (top.interp && ch === '{') {
+        if (next === '{') {
+          index += 2;
+          continue;
+        }
+        index += 1;
+        stack.push({ mode: 'code', depth: 0, closeBrace: true });
+        sync(index);
+        continue;
+      }
+      if (top.interp && ch === '}' && next === '}') {
+        index += 2;
+        continue;
+      }
+      if (top.mode === 'template' && ch === '$' && next === '{') {
+        index += 2;
+        stack.push({ mode: 'code', depth: 0, closeBrace: true });
+        sync(index);
+        continue;
+      }
+      if (ch === top.quote) {
+        index += 1;
+        stack.pop();
+        sync(index);
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
+    // Code.
+    if (top.closeBrace && ch === '}') {
+      if (top.depth) {
+        top.depth -= 1;
+        index += 1;
+        continue;
+      }
+      index += 1;
+      stack.pop();
+      sync(index);
+      continue;
+    }
+    if (ch === '{') {
+      top.depth = (top.depth || 0) + 1;
+      index += 1;
+      continue;
+    }
+    if (opts.hash && ch === '#') {
+      if (index > start) ranges.push({ st
