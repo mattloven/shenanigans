@@ -11,7 +11,7 @@ export function mountTestOutlines(root) {
   for (const article of findFileDiffs(root)) {
     const path = getFilePath(article);
     const language = commentLanguage(path);
-    if (!isTestFile(path) || !language) {
+    if (!isTestFile(path) || (language !== 'js' && language !== 'cs')) {
       clearOutline(article);
       continue;
     }
@@ -57,13 +57,20 @@ function applySpan(path, rows, lines, span, index) {
   const fold = document.createElement('button');
   fold.type = 'button';
   fold.className = 'bbrd-test-fold';
+  const count = span.end - span.start + 1;
+  const pill = document.createElement('span');
+  pill.className = 'bbrd-pill bbrd-fold-pill';
+  pill.textContent = `Test - ${formatCount(count)} ${count === 1 ? 'line' : 'lines'}`;
+  // The name stays for screen readers and the tooltip; in a side-by-side diff a
+  // visible sentence lands under both columns instead of in the code like a pill.
   const title = document.createElement('span');
   title.className = 'bbrd-test-title';
   title.textContent = span.title;
   const stat = document.createElement('span');
   stat.className = 'bbrd-test-stat';
   stat.textContent = `+${formatCount(added)} −${formatCount(removed)}`;
-  fold.append(title, stat);
+  fold.title = `${span.title} (${stat.textContent})`;
+  fold.append(pill, title, stat);
   const nodes = nodesInSpan(start, end);
   const open = openTests.has(key);
   fold.setAttribute('aria-expanded', open ? 'true' : 'false');
