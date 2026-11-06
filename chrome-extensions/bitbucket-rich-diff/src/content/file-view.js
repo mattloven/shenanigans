@@ -9,6 +9,12 @@ import panelCss from '../styles/panel.css';
 const ATTR_VIEW = 'data-bbrd-view';
 const STOP_EVENTS = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'keydown', 'keyup'];
 
+/** Combined old+new size above which viewport auto-parse is skipped (2 MB hard cap lives in the API client). */
+export const HEAVY_FILE_CHARS = 256 * 1024;
+
+/** Start loading when the file header is this close to the viewport. */
+const NEAR_VIEWPORT_MARGIN = '800px 0px';
+
 /**
  * Owns the tab bar and rich panel for one file diff article.
  */
@@ -29,6 +35,11 @@ export class FileView {
     this.loading = null;
     this.renderToken = 0;
     this.changeIndex = -1;
+    /** True once the reviewer picks Rich Diff / Preview / Tree (or Diff) explicitly. */
+    this.userActivated = context.chosenViews.has(path);
+    /** Rich panel HTML currently shown for this.view, when loaded. */
+    this.renderedView = null;
+    this.observer = null;
     this.tabs = this.createTabs();
     this.host = this.createHost();
   }
@@ -45,10 +56,11 @@ export class FileView {
     if (content && content.previousElementSibling !== this.host) {
       content.parentElement.insertBefore(this.host, content);
     }
-    if (this.article.getAttribute(ATTR_VIEW) !== this.view) this.applyView();
+    this.applyView();
   }
 
   destroy() {
+    this.stopObserving();
     this.tabs.remove();
     this.host.remove();
     this.article.removeAttribute(ATTR_VIEW);
@@ -114,9 +126,11 @@ export class FileView {
   }
 
   setView(view) {
-    if (view === this.view) return;
+    const reselect = view === this.view;
     this.view = view;
     this.context.chosenViews.set(this.path, view);
+    if (view !== 'diff') this.userActivated = true;
+    if (reselect && this.renderedView === view && !this.host.hidden) return;
     this.applyView();
   }
 
@@ -128,32 +142,113 @@ export class FileView {
   }
 
   applyView() {
-    this.article.setAttribute(ATTR_VIEW, this.view);
+    this.syncTabs();
+    if (this.view === 'diff') {
+      this.stopObserving();
+      this.showStandardDiff();
+      return;
+    }
+    if (this.renderedView === this.view && this.body.childNodes.length) {
+      this.showRichPanel();
+      return;
+    }
+    if (this.data) {
+      const cached = this.context.getCachedView(this.path, this.view, this.data);
+      if (cached) {
+        this.paintBuilt(cached);
+        return;
+      }
+    }
+    // Keep Bitbucket's own diff visible until a rich panel is ready.
+    this.showStandardDiff();
+    if (this.userActivated) this.beginRichLoad('user');
+    else this.observeUntilNear();
+  }
+
+  syncTabs() {
     for (const tab of this.tabs.querySelectorAll('.bbrd-tab')) {
       const selected = tab.dataset.view === this.view;
       tab.setAttribute('aria-selected', String(selected));
       tab.tabIndex = selected ? 0 : -1;
     }
-    this.host.hidden = this.view === 'diff';
-    if (this.view !== 'diff') this.render();
   }
 
-  async render() {
+  showStandardDiff() {
+    this.article.setAttribute(ATTR_VIEW, 'diff');
+    this.host.hidden = true;
+  }
+
+  showRichPanel() {
+    this.article.setAttribute(ATTR_VIEW, this.view);
+    this.host.hidden = false;
+  }
+
+  observeUntilNear() {
+    if (this.observer || this.view === 'diff') return;
+    if (typeof IntersectionObserver !== 'function') return;
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        this.stopObserving();
+        if (this.view !== 'diff' && this.renderedView !== this.view) this.beginRichLoad('viewport');
+      },
+      { root: null, rootMargin: NEAR_VIEWPORT_MARGIN, threshold: 0 },
+    );
+    this.observer.observe(getHeader(this.article) || this.article);
+  }
+
+  stopObserving() {
+    this.observer?.disconnect();
+    this.observer = null;
+  }
+
+  /**
+   * @param {'user' | 'viewport'} reason
+   */
+  async beginRichLoad(reason) {
+    if (this.view === 'diff') return;
     const token = ++this.renderToken;
     const view = this.view;
     if (!this.data) {
-      this.toolbar.hidden = true;
-      this.body.innerHTML = '<div class="bbrd-loading" role="status"><span class="spinner"></span>Loading file versions…</div>';
+      if (reason === 'user') {
+        this.showRichPanel();
+        this.toolbar.hidden = true;
+        this.body.innerHTML = '<div class="bbrd-loading" role="status"><span class="spinner"></span>Loading file versions…</div>';
+      }
       try {
         this.loading ??= this.context.loadFile(this.path);
         this.data = await this.loading;
       } catch (error) {
         this.loading = null;
-        if (token === this.renderToken) this.showError(describeLoadError(error));
+        if (token !== this.renderToken) return;
+        if (reason === 'user') this.showError(describeLoadError(error));
         return;
       }
     }
     if (token !== this.renderToken || view !== this.view) return;
+
+    const heavy = isHeavy(this.data);
+    if (heavy && reason === 'viewport' && !this.userActivated) {
+      // Large files stay on Bitbucket's diff until the reviewer opens Rich Diff / Preview.
+      this.showStandardDiff();
+      return;
+    }
+
+    const cached = this.context.getCachedView(this.path, view, this.data);
+    if (cached) {
+      this.paintBuilt(cached);
+      return;
+    }
+
+    this.showRichPanel();
+    if (!this.body.querySelector('.bbrd-loading')) {
+      this.toolbar.hidden = true;
+      this.body.innerHTML = '<div class="bbrd-loading" role="status"><span class="spinner"></span>Loading file versions…</div>';
+    }
+
+    if (heavy || reason === 'user') await yieldToMain();
+    if (token !== this.renderToken || view !== this.view) return;
+
     let built;
     try {
       built = buildView(this.type, view, this.data);
@@ -161,14 +256,28 @@ export class FileView {
       this.showError(error.message);
       return;
     }
+    this.context.setCachedView(this.path, view, this.data, built);
+    this.paintBuilt(built);
+  }
+
+  paintBuilt(built) {
     this.renderToolbar(built);
     this.body.innerHTML = sanitize(built.html);
     this.changeIndex = -1;
+    this.renderedView = this.view;
+    this.showRichPanel();
     this.updatePanelClasses();
     this.updateCounter();
   }
 
+  async render() {
+    this.userActivated = true;
+    await this.beginRichLoad('user');
+  }
+
   showError(message) {
+    this.showRichPanel();
+    this.renderedView = null;
     this.toolbar.hidden = false;
     this.toolbar.innerHTML = '<span class="spacer"></span><button type="button" class="btn" data-action="retry">Retry</button><button type="button" class="btn" data-action="show-diff">Show standard diff</button>';
     this.body.innerHTML = errorHtml(message);
@@ -277,6 +386,8 @@ export class FileView {
         case 'retry':
           this.context.refresh();
           this.data = null;
+          this.loading = null;
+          this.renderedView = null;
           this.render();
           break;
         case 'show-diff':
@@ -340,6 +451,14 @@ function stickyOffset(header) {
 
 function isDeletion(el) {
   return el.matches('.bbrd-blk--del, .bbrd-el--del, .jd-row--removed');
+}
+
+function isHeavy(data) {
+  return (data.oldText?.length ?? 0) + (data.newText?.length ?? 0) >= HEAVY_FILE_CHARS;
+}
+
+function yieldToMain() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function describeLoadError(error) {
