@@ -104,3 +104,164 @@ function scanSlashLine(line, state, opts) {
         stack.pop();
         sync(index);
       } else {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (top.mode === 'string' || top.mode === 'template') {
+      if (ch === '\\' && !top.verbatim) {
+        index += 2;
+        continue;
+      }
+      if (top.verbatim && ch === '"') {
+        if (next === '"') {
+          index += 2;
+          continue;
+        }
+        index += 1;
+        stack.pop();
+        sync(index);
+        continue;
+      }
+      if (top.interp && ch === '{') {
+        if (next === '{') {
+          index += 2;
+          continue;
+        }
+        index += 1;
+        stack.push({ mode: 'code', depth: 0, closeBrace: true });
+        sync(index);
+        continue;
+      }
+      if (top.interp && ch === '}' && next === '}') {
+        index += 2;
+        continue;
+      }
+      if (top.mode === 'template' && ch === '$' && next === '{') {
+        index += 2;
+        stack.push({ mode: 'code', depth: 0, closeBrace: true });
+        sync(index);
+        continue;
+      }
+      if (ch === top.quote) {
+        index += 1;
+        stack.pop();
+        sync(index);
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
+    // Code.
+    if (top.closeBrace && ch === '}') {
+      if (top.depth) {
+        top.depth -= 1;
+        index += 1;
+        continue;
+      }
+      index += 1;
+      stack.pop();
+      sync(index);
+      continue;
+    }
+    if (ch === '{') {
+      top.depth = (top.depth || 0) + 1;
+      index += 1;
+      continue;
+    }
+    if (opts.hash && ch === '#') {
+      if (index > start) ranges.push({ start, end: index, kind });
+      ranges.push({ start: index, end: line.length, kind: 'comment' });
+      return { ranges, state: { stack } };
+    }
+    if (ch === '/' && next === '/') {
+      const summary = opts.summaryDocs && opts.cs && line[index + 2] === '/';
+      if (index > start) ranges.push({ start, end: index, kind });
+      ranges.push({ start: index, end: line.length, kind: summary ? 'summary' : 'comment' });
+      return { ranges, state: { stack } };
+    }
+    if (ch === '/' && next === '*') {
+      const third = line[index + 2];
+      const fourth = line[index + 3];
+      const summary = opts.summaryDocs && third === '*' && fourth !== '*';
+      if (index > start) ranges.push({ start, end: index, kind });
+      stack.push({ mode: 'block', summary });
+      start = index;
+      kind = summary ? 'summary' : 'comment';
+      index += 2;
+      continue;
+    }
+    if (opts.cs && (ch === '@' || ch === '$') && startsCsString(line, index)) {
+      const opened = openCsString(line, index);
+      index = opened.index;
+      stack.push(opened.frame);
+      continue;
+    }
+    if (opts.cs && ch === "'") {
+      index = consumeCsChar(line, index);
+      continue;
+    }
+    if (opts.jsTemplate && ch === '`') {
+      index += 1;
+      stack.push({ mode: 'template', quote: '`' });
+      continue;
+    }
+    if ((opts.jsTemplate || !opts.cs) && (ch === '"' || ch === "'")) {
+      // js, jsonc, hcl: both quote styles. C# uses " via the branch below / csStrings.
+      if (!opts.cs) {
+        index += 1;
+        stack.push({ mode: 'string', quote: ch });
+        continue;
+      }
+    }
+    if (opts.cs && ch === '"') {
+      index += 1;
+      stack.push({ mode: 'string', quote: ch });
+      continue;
+    }
+    if (opts.jsRegex && ch === '/' && next !== '/' && next !== '*' && isRegexStart(line, index)) {
+      index = consumeRegex(line, index + 1);
+      continue;
+    }
+    index += 1;
+  }
+
+  if (index > start) ranges.push({ start, end: index, kind });
+  else if (kind !== 'code') ranges.push({ start: 0, end: 0, kind });
+  return { ranges, state: { stack } };
+}
+
+/** XML / XML-ish: <!-- ... --> only. No summary form; element text is not a comment. */
+function scanXmlLine(line, state) {
+  const stack = state.stack.map((frame) => ({ ...frame }));
+  /** @type {{ start: number, end: number, kind: CommentKind }[]} */
+  const ranges = [];
+  let index = 0;
+  let kind = kindOf(stack);
+  let start = 0;
+
+  const sync = (next) => {
+    const nextKind = kindOf(stack);
+    if (nextKind !== kind) {
+      if (next > start) ranges.push({ start, end: next, kind });
+      start = next;
+      kind = nextKind;
+    }
+    index = next;
+  };
+
+  while (index < line.length) {
+    const top = stack[stack.length - 1];
+    if (top.mode === 'markup') {
+      if (line.startsWith('-->', index)) {
+        index += 3;
+        stack.pop();
+        sync(index);
+      } else {
+        index += 1;
+      }
+      continue;
+    }
+    if (line.startsWith('<!--', index)) {
