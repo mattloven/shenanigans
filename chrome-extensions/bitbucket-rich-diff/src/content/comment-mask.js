@@ -7,6 +7,7 @@ const WRAP = 'data-bbrd-wrap';
 /** Removes comment masking so a file can be re-scanned or shown in full. */
 export function clearCommentMasks(root) {
   for (const row of root.querySelectorAll('.bbrd-hide-line, .bbrd-fold-line')) row.classList.remove('bbrd-hide-line', 'bbrd-fold-line', 'bbrd-comment-open');
+  for (const marked of [...root.querySelectorAll('[data-bbrd-fold-expect]')]) marked.removeAttribute('data-bbrd-fold-expect');
   for (const wrap of [...root.querySelectorAll(`[${WRAP}]`)]) wrap.replaceWith(...wrap.childNodes);
   for (const mark of [...root.querySelectorAll('[data-bbrd-mask]')]) mark.remove();
   for (const cell of root.querySelectorAll('[data-line-type]')) cell.normalize();
@@ -130,8 +131,29 @@ const openCommentFolds = new Set();
 function setCommentOpen(rows, open) {
   for (const row of rows) {
     row.classList.toggle('bbrd-comment-open', open);
-    for (const inner of row.querySelectorAll('.bbrd-hide-line')) inner.classList.toggle('bbrd-comment-open', open);
+    // Side-by-side cells carry hide/fold on the inner line; keep those in sync too.
+    for (const inner of row.querySelectorAll('.bbrd-hide-line, .bbrd-fold-line')) {
+      inner.classList.toggle('bbrd-comment-open', open);
+    }
   }
+}
+
+function foldKey(path, index, run) {
+  return `${path}\n${index}\n${(run[0].textContent ?? '').slice(0, 40)}`;
+}
+
+function syncCommentFold(fold, run, key) {
+  const open = openCommentFolds.has(key);
+  fold.setAttribute('aria-expanded', open ? 'true' : 'false');
+  setCommentOpen(run, open);
+  for (const row of run) {
+    row.classList.add('bbrd-hide-line');
+    // Blank side-by-side partners must hide with the run, not only the commented cell.
+    for (const line of row.querySelectorAll('[data-qa="code-line"]')) line.classList.add('bbrd-hide-line');
+  }
+  // Visibility inside a collapsed test is handled by CSS :has(+ .bbrd-test-collapsed)
+  // so expanding the test shows the pill again without a rescan.
+  fold.classList.remove('bbrd-test-collapsed');
 }
 
 function foldCommentRuns(article, path) {
@@ -149,10 +171,19 @@ function foldCommentRuns(article, path) {
   }
   if (current.length) runs.push(current);
   const signature = runs.map((run) => run.length).join(',');
-  if (article.getAttribute('data-bbrd-folds') === signature && article.querySelectorAll('.bbrd-comment-fold').length === runs.length) return;
-  for (const fold of article.querySelectorAll('.bbrd-comment-fold')) fold.remove();
+  const existing = [...article.querySelectorAll('.bbrd-comment-fold')];
+  // Bitbucket may rewrite row className while leaving our fold buttons and mask
+  // markers in place. Re-apply hide/open whenever the run shape still matches.
+  if (article.getAttribute('data-bbrd-folds') === signature && existing.length === runs.length) {
+    const hidden = runs.every((run) => run.every((row) => row.classList.contains('bbrd-hide-line')));
+    if (hidden) {
+      runs.forEach((run, index) => syncCommentFold(existing[index], run, foldKey(path, index, run)));
+      return;
+    }
+  }
+  for (const fold of existing) fold.remove();
   runs.forEach((run, index) => {
-    const key = `${path}\n${index}\n${(run[0].textContent ?? '').slice(0, 40)}`;
+    const key = foldKey(path, index, run);
     const fold = document.createElement('button');
     fold.type = 'button';
     fold.className = 'bbrd-comment-fold';
@@ -161,10 +192,7 @@ function foldCommentRuns(article, path) {
     pill.className = 'bbrd-pill bbrd-fold-pill';
     pill.textContent = `Comments - ${formatCount(count)} ${count === 1 ? 'line' : 'lines'}`;
     fold.append(pill);
-    const open = openCommentFolds.has(key);
-    fold.setAttribute('aria-expanded', open ? 'true' : 'false');
-    setCommentOpen(run, open);
-    for (const row of run) row.classList.add('bbrd-hide-line');
+    syncCommentFold(fold, run, key);
     // Focusing the bar scrolls it into view and fights the wheel gesture.
     fold.addEventListener('mousedown', (event) => event.preventDefault());
     fold.addEventListener('click', (event) => {
@@ -202,7 +230,18 @@ function concealVanishedRows(article) {
 }
 
 function masksIntact(rows) {
-  return rows.every((row) => [...row.querySelectorAll('[data-line-type]')].every((cell) => cell.querySelector('[data-bbrd-mask]')));
+  if (!rows.every((row) => [...row.querySelectorAll('[data-line-type]')].every((cell) => cell.querySelector('[data-bbrd-mask]')))) {
+    return false;
+  }
+  // Class wipes that leave mask markers would otherwise skip remasking and show
+  // comment text beside an orphaned fold pill.
+  for (const row of rows) {
+    if (row.hasAttribute('data-bbrd-fold-expect') && !row.classList.contains('bbrd-fold-line')) return false;
+    for (const line of row.querySelectorAll('[data-qa="code-line"]')) {
+      if (line.hasAttribute('data-bbrd-fold-expect') && !line.classList.contains('bbrd-fold-line')) return false;
+    }
+  }
+  return true;
 }
 
 function textSize(rows) {
@@ -274,6 +313,7 @@ function maskSideBySide(described, language, settings) {
 function applyCell(entry, result) {
   entry.line.classList.toggle('bbrd-hide-line', result.hideLine);
   entry.line.classList.toggle('bbrd-fold-line', !!result.fold);
+  entry.line.toggleAttribute('data-bbrd-fold-expect', !!result.fold);
   if (!result.hideLine) maskCell(entry.cell, result.intervals);
   const mark = document.createElement('span');
   mark.setAttribute('data-bbrd-mask', '');
