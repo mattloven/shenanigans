@@ -7,7 +7,9 @@
     "watch": "node scripts/build.mjs --watch",
     "test": "vitest run",
     "test:e2e": "node scripts/build.mjs && node --test --test-concurrency=1 --test-reporter=spec test/e2e/*.e2e.mjs",
-    "package": "node scripts/build.mjs && cd dist && zip -qr ../bitbucket-rich-diff.zip ."
+    "package": "node scripts/build.mjs && cd dist && zip -qr ../bitbucket-rich-diff.zip .",
+    "pretest": "node scripts/inflate-land.mjs",
+    "prebuild": "node scripts/inflate-land.mjs"
   },
   "dependencies": {
     "diff": "^9.0.0",
