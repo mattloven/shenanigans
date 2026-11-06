@@ -1,0 +1,145 @@
+/* Fold chevrons, compact test pills, light selected group tint (loaded after page.css). */
+
+.bbrd-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--bbrd-group-ink, #1558bc) 18%, #fff);
+  border-radius: 6px;
+  background: var(--bbrd-group, #f1f2f4);
+  color: var(--ds-text, #292a2e);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bbrd-group[aria-pressed='true'] {
+  background: var(--bbrd-group-selected, color-mix(in srgb, var(--bbrd-group-ink, #1558bc) 22%, #fff));
+  color: var(--ds-text, #292a2e);
+  border: 2px solid var(--bbrd-group-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bbrd-group-ink) 20%, transparent);
+}
+
+.bbrd-group[aria-pressed='true'] .bbrd-group-count,
+.bbrd-group[aria-pressed='true'] .bbrd-group-viewed {
+  color: var(--ds-text-subtle, #44546f);
+}
+
+.bbrd-group-state {
+  display: none;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bbrd-group-ink, #1558bc) 14%, #fff);
+  color: var(--bbrd-group-ink, #1558bc);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 16px;
+}
+
+.bbrd-group[aria-pressed='true'] .bbrd-group-state {
+  display: inline-flex;
+}
+
+.bbrd-group-name {
+  color: var(--ds-text, #172b4d);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.bbrd-group-count,
+.bbrd-group-viewed {
+  color: var(--ds-text-subtle, #44546f);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.bbrd-group-meter {
+  width: 100%;
+  height: 4px;
+  margin: 6px 0 0;
+  border-radius: 2px;
+  background: rgba(9, 30, 66, 0.12);
+  overflow: hidden;
+}
+
+.bbrd-group-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--bbrd-group-ink, currentColor);
+}
+
+button.bbrd-comment-fold,
+button.bbrd-test-fold {
+  position: relative;
+  display: inline-flex;
+  width: auto;
+  padding: 2px 0;
+  background: transparent;
+  font-weight: 400;
+  font-style: normal;
+}
+
+button.bbrd-comment-fold .bbrd-fold-pill,
+button.bbrd-test-fold .bbrd-fold-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-style: normal;
+}
+
+button.bbrd-comment-fold .bbrd-fold-pill::before,
+button.bbrd-test-fold .bbrd-fold-pill::before {
+  content: '▸';
+  flex: none;
+  font-size: 10px;
+  line-height: 1;
+  color: inherit;
+}
+
+button.bbrd-comment-fold[aria-expanded='true'] .bbrd-fold-pill::before,
+button.bbrd-test-fold[aria-expanded='true'] .bbrd-fold-pill::before {
+  content: '▾';
+}
+
+/* Adjacent collapsed tests are sibling buttons; each needs its own row. */
+button.bbrd-test-fold {
+  display: flex;
+  width: fit-content;
+}
+
+button.bbrd-test-fold .bbrd-test-title,
+button.bbrd-test-fold .bbrd-test-stat {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.bbrd-file-hidden,
+.bbrd-group-hidden,
+.bbrd-hide-line:not(.bbrd-comment-open),
+.bbrd-fold-line:not(.bbrd-comment-open),
+.bbrd-test-collapsed {
+  display: none !important;
+}
+
+.bbrd-hide-line.bbrd-comment-open,
+.bbrd-fold-line.bbrd-comment-open {
+  display: block !important;
+}
+
+/* Keep collapsed tests hidden even when a nested comment fold is expanded. */
+.bbrd-test-collapsed.bbrd-hide-line.bbrd-comment-open,
+.bbrd-test-collapsed.bbrd-fold-line.bbrd-comment-open {
+  display: none !important;
+}

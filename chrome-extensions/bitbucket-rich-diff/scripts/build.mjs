@@ -13,6 +13,7 @@ fs.mkdirSync(outdir, { recursive: true });
 const copies = [
   ['src/manifest.json', 'manifest.json'],
   ['src/styles/page.css', 'page.css'],
+  ['src/styles/page-folds.css', 'page-folds.css'],
   ['src/options/options.html', 'options.html'],
   ['src/options/options.css', 'options.css'],
   ['assets/icons', 'icons'],
