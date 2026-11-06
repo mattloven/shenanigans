@@ -186,4 +186,137 @@ function foldCommentRuns(article, path) {
     const key = foldKey(path, index, run);
     const fold = document.createElement('button');
     fold.type = 'button';
-    fold.className = 'bbrd-comment-fold
+    fold.className = 'bbrd-comment-fold';
+    const count = run.length;
+    const pill = document.createElement('span');
+    pill.className = 'bbrd-pill bbrd-fold-pill';
+    pill.textContent = `Comments - ${formatCount(count)} ${count === 1 ? 'line' : 'lines'}`;
+    fold.append(pill);
+    syncCommentFold(fold, run, key);
+    // Focusing the bar scrolls it into view and fights the wheel gesture.
+    fold.addEventListener('mousedown', (event) => event.preventDefault());
+    fold.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const next = fold.getAttribute('aria-expanded') !== 'true';
+      fold.setAttribute('aria-expanded', next ? 'true' : 'false');
+      if (next) openCommentFolds.add(key);
+      else openCommentFolds.delete(key);
+      setCommentOpen(run, next);
+    });
+    run[0].parentElement.insertBefore(fold, run[0]);
+  });
+  article.setAttribute('data-bbrd-folds', signature);
+}
+
+/** A row folds when every side that has text is a hidden comment. A blank side-by-side column does not keep it open. */
+function isFoldedCommentRow(row) {
+  if (row.classList.contains('bbrd-fold-line')) return true;
+  const lines = [...row.querySelectorAll('[data-qa="code-line"]')];
+  const meaningful = lines.filter((line) => (line.textContent ?? '').trim() !== '');
+  return meaningful.length > 0 && meaningful.every((line) => line.classList.contains('bbrd-fold-line'));
+}
+
+/** A summary line that is hidden outright takes its blank side-by-side partner with it, and grows no bar. */
+function concealVanishedRows(article) {
+  for (const row of article.querySelectorAll('[data-key="code-line"]')) {
+    if (row.classList.contains('bbrd-fold-line')) continue;
+    const lines = [...row.querySelectorAll('[data-qa="code-line"]')];
+    const meaningful = lines.filter((line) => (line.textContent ?? '').trim() !== '');
+    if (meaningful.length > 0 && meaningful.every((line) => line.classList.contains('bbrd-hide-line') && !line.classList.contains('bbrd-fold-line'))) {
+      row.classList.add('bbrd-hide-line');
+    }
+  }
+}
+
+function masksIntact(rows) {
+  if (!rows.every((row) => [...row.querySelectorAll('[data-line-type]')].every((cell) => cell.querySelector('[data-bbrd-mask]')))) {
+    return false;
+  }
+  // Class wipes that leave mask markers would otherwise skip remasking and show
+  // comment text beside an orphaned fold pill.
+  for (const row of rows) {
+    if (row.hasAttribute('data-bbrd-fold-expect') && !row.classList.contains('bbrd-fold-line')) return false;
+    for (const line of row.querySelectorAll('[data-qa="code-line"]')) {
+      if (line.hasAttribute('data-bbrd-fold-expect') && !line.classList.contains('bbrd-fold-line')) return false;
+    }
+  }
+  return true;
+}
+
+function textSize(rows) {
+  let size = 0;
+  for (const row of rows) {
+    for (const cell of row.querySelectorAll('[data-line-type]')) size += cell.textContent.length;
+  }
+  return size;
+}
+
+/** Bitbucket's highlighter appends a newline that is not part of the source line. */
+function sourceText(text) {
+  return text.endsWith('\n') ? text.slice(0, -1) : text;
+}
+
+function lineTypeOf(cell) {
+  const typeAttr = cell.getAttribute('data-line-type');
+  return typeAttr === '+' || typeAttr === '-' ? typeAttr : ' ';
+}
+
+function lineRoot(cell, row) {
+  return cell.closest('[data-qa="code-line"]') || row;
+}
+
+function maskArticle(rows, language, settings) {
+  const described = [];
+  for (const row of rows) {
+    const cells = [...row.querySelectorAll('[data-line-type]')].map((cell) => ({
+      cell,
+      line: lineRoot(cell, row),
+      type: lineTypeOf(cell),
+      text: sourceText(cell.textContent ?? ''),
+    }));
+    if (cells.length) described.push({ row, cells });
+  }
+  if (described.some((row) => row.cells.length > 1)) maskSideBySide(described, language, settings);
+  else maskUnified(described, language, settings);
+}
+
+function maskUnified(described, language, settings) {
+  const classified = classifyDiffRows(
+    described.map((row) => ({ type: row.cells[0].type, text: row.cells[0].text })),
+    language,
+    settings,
+  );
+  described.forEach((row, index) => {
+    applyCell(row.cells[0], classified[index]);
+    if (classified[index].hideLine) row.row.classList.add('bbrd-hide-line');
+  });
+}
+
+function maskSideBySide(described, language, settings) {
+  const classified = classifySideBySideRows(
+    described.map((row) => ({ cells: row.cells.map((cell) => ({ type: cell.type, text: cell.text })) })),
+    language,
+    settings,
+  );
+  described.forEach((row, index) => {
+    const results = classified[index];
+    let allHidden = results.length > 0;
+    row.cells.forEach((cell, cellIndex) => {
+      applyCell(cell, results[cellIndex]);
+      if (!results[cellIndex].hideLine) allHidden = false;
+    });
+    if (allHidden) row.row.classList.add('bbrd-hide-line');
+  });
+}
+
+function applyCell(entry, result) {
+  entry.line.classList.toggle('bbrd-hide-line', result.hideLine);
+  entry.line.classList.toggle('bbrd-fold-line', !!result.fold);
+  entry.line.toggleAttribute('data-bbrd-fold-expect', !!result.fold);
+  if (!result.hideLine) maskCell(entry.cell, result.intervals);
+  const mark = document.createElement('span');
+  mark.setAttribute('data-bbrd-mask', '');
+  mark.hidden = true;
+  entry.cell.append(mark);
+}
