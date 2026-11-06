@@ -137,3 +137,40 @@ describe('mountReviewGroups', () => {
     expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(false);
 
     document.querySelector('[data-group="docs"]').click();
+    expect(document.querySelector('.bbrd-group-hidden')).toBeNull();
+    const continueButton = document.querySelector('.bbrd-review-continue');
+    expect(continueButton.textContent).toBe('Continue to Infrastructure');
+    continueButton.click();
+    const infrastructureCard = document.querySelector('[data-group="infrastructure"]');
+    expect(infrastructureCard.getAttribute('aria-pressed')).toBe('true');
+    expect(infrastructureCard.querySelector('.bbrd-group-state').textContent).toBe('Showing');
+    expect(continueButton.textContent).toBe('Continue to Business');
+    expect(continueButton.disabled).toBe(false);
+    expect(document.querySelector('a[href="#chg-src/appsettings.json"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(false);
+    expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(true);
+    continueButton.click();
+    expect(document.querySelector('[data-group="business"]').getAttribute('aria-pressed')).toBe('true');
+    expect(continueButton.textContent).toBe('Continue to Tests');
+    document.querySelector('[data-group="docs"]').click();
+    expect(document.querySelector('[data-group="docs"]').getAttribute('aria-pressed')).toBe('true');
+    expect(continueButton.disabled).toBe(true);
+    expect(continueButton.textContent).toBe('Continue');
+  });
+
+  it('hides the section and clears a selected group', () => {
+    document.body.innerHTML = `
+      <section class="bbrd-stats"></section>
+      <ul id="file-tree"><li><a href="#chg-README.md">README.md</a></li></ul>`;
+    const storage = { getItem: () => null };
+    mountReviewGroups(document, null, storage);
+    document.querySelector('[data-group="docs"]').click();
+    mountReviewGroups(document, null, storage, { hideReviewGroups: true });
+    expect(document.querySelector('.bbrd-review')).toBeNull();
+    expect(document.querySelector('.bbrd-group-hidden')).toBeNull();
+  });
+});
+
+describe('review workflows', () => {
+  beforeEach(() => resetReviewGroup());
+
+  it('keeps the .NET sample and lets a path pattern claim a file first', () => {
