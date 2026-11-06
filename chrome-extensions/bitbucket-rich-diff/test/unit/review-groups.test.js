@@ -174,3 +174,36 @@ describe('review workflows', () => {
   beforeEach(() => resetReviewGroup());
 
   it('keeps the .NET sample and lets a path pattern claim a file first', () => {
+    expect(normalizeWorkflowState(undefined, 'missing').activeReviewWorkflow).toBe('dotnet');
+    expect(normalizeWorkflowState(undefined, 'dotnet').reviewWorkflows[0].name).toBe('.NET Workflow');
+    expect(normalizeWorkflowState([{ id: 'dotnet', name: 'Renamed', groups: [{ id: 'bad id', name: '', color: 'blue', filter: 'nope', pattern: '' }] }], 'dotnet').reviewWorkflows[0].groups[0]).toMatchObject({
+      id: 'badid',
+      name: 'Group',
+      color: '#1558bc',
+      filterId: '',
+    });
+    const sample = dotnetWorkflow().groups;
+    expect(assignGroup('src/Api.Tests/Api.Tests.csproj', sample)).toBe('tests');
+    expect(assignGroup('src/Api.Tests/PaymentTests.cs', sample)).toBe('tests');
+    expect(assignGroup('src/Api/Api.csproj', sample)).toBe('infrastructure');
+    expect(assignGroup('serverless console/build.cake', sample)).toBe('infrastructure');
+    expect(assignGroup('serverless console/src/Dockerfile.api', sample)).toBe('infrastructure');
+    expect(assignGroup('infra/main.tf', sample)).toBe('infrastructure');
+    expect(assignGroup('src/appsettings.Development.json', sample)).toBe('infrastructure');
+    expect(assignGroup('.github/workflows/ci.yml', sample)).toBe('infrastructure');
+    expect(assignGroup('package-lock.json', sample)).toBe('infrastructure');
+    expect(assignGroup('CODEOWNERS', sample)).toBe('infrastructure');
+    expect(assignGroup('.env.production', sample)).toBe('infrastructure');
+    expect(assignGroup('config/production.env', sample)).toBe('infrastructure');
+    expect(assignGroup('pnpm-lock.yaml', sample)).toBe('infrastructure');
+    expect(assignGroup('assets/app.min.css', sample)).toBe('infrastructure');
+    expect(assignGroup('src/Api/Api.g.i.cs', sample)).toBe('infrastructure');
+    expect(assignGroup('src/Api/Dto.generated.cs', sample)).toBe('infrastructure');
+    expect(assignGroup('README.md', sample)).toBe('docs');
+    expect(assignGroup('docs/LICENSE', sample)).toBe('docs');
+    expect(assignGroup('src/App.cs', sample)).toBe('business');
+    const custom = [
+      { id: 'sql', name: 'SQL', color: '#ae2e24', filter: 'pattern', pattern: '[.]sql$' },
+      { id: 'other', name: 'Other', color: '#206a83', filter: 'rest', pattern: '' },
+    ];
+    expect(assignGroup('db/migrate.sql', custom)).toBe('sql');
