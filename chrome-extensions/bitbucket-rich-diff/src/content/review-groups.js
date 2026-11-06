@@ -264,4 +264,89 @@ function continueTarget(selected, summaries, order) {
  */
 /**
  * @param {ReviewFile[]} files
- * @param {Set<string>} revie
+ * @param {Set<string>} reviewed
+ * @param {import('../core/review-workflows.js').WorkflowGroup[]} groups
+ */
+function summariesFor(files, reviewed, groups) {
+  return groups.map((group) => {
+    const rows = files.filter((file) => file.group === group.id);
+    return { group: group.id, count: rows.length, viewed: rows.filter((file) => reviewed.has(file.path)).length };
+  });
+}
+
+/** @param {ParentNode} root */
+function currentPath(root) {
+  const doc = root.nodeType === 9 ? root : root.ownerDocument;
+  const hash = doc?.defaultView?.location?.hash ?? '';
+  const fromHash = normalizePath(pathFromFileLink(hash));
+  if (fromHash) return fromHash;
+  for (const article of findFileDiffs(root)) {
+    if (article.classList.contains('bbrd-group-hidden')) continue;
+    const path = normalizePath(getFilePath(article));
+    if (path) return path;
+  }
+  return null;
+}
+
+/**
+ * @param {HTMLElement} panel
+ * @param {{ reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], activeReviewWorkflow?: string }} settings
+ * @param {WorkflowChange | null} onChange
+ */
+function ensureSection(panel, settings, onChange) {
+  panel.querySelector(':scope > .bbrd-groups')?.remove();
+  let section = panel.querySelector('.bbrd-review');
+  if (!section) {
+    section = panel.ownerDocument.createElement('section');
+    section.className = 'bbrd-review';
+    section.innerHTML = `<div class="bbrd-review-head"><h3></h3><button type="button" class="bbrd-info" aria-label="About ${REVIEW_TITLE}">i</button></div><div class="bbrd-groups" role="group" aria-label="${REVIEW_TITLE}"></div>`;
+    const info = section.querySelector('.bbrd-info');
+    info?.addEventListener('click', (event) => event.preventDefault());
+    const head = section.querySelector('.bbrd-review-head');
+    const pick = panel.ownerDocument.createElement('label');
+    pick.className = 'bbrd-workflow-pick';
+    pick.append('Workflow');
+    const select = panel.ownerDocument.createElement('select');
+    select.className = 'bbrd-workflow';
+    select.setAttribute('aria-label', 'Review workflow');
+    select.addEventListener('change', () => {
+      if (!lastMount?.onChange) return;
+      activeGroup = null;
+      shownWorkflow = select.value;
+      const state = normalizeWorkflowState(lastMount.settings.reviewWorkflows, select.value, lastMount.settings.reviewFilters);
+      lastMount.onChange({ reviewWorkflows: state.reviewWorkflows, reviewFilters: state.reviewFilters, activeReviewWorkflow: select.value });
+    });
+    const edit = panel.ownerDocument.createElement('button');
+    edit.type = 'button';
+    edit.className = 'bbrd-workflow-edit';
+    edit.textContent = 'Edit';
+    edit.addEventListener('click', () => {
+      editorOpen = true;
+      if (!lastMount) return;
+      mountReviewGroups(lastMount.root, lastMount.pr, lastMount.storage, lastMount.settings, lastMount.onChange);
+    });
+    pick.append(select);
+    info?.after(pick);
+    pick.after(edit);
+    if (head && !head.contains(pick)) head.append(pick, edit);
+    panel.append(section);
+  }
+  const heading = section.querySelector('h3');
+  if (heading && heading.textContent !== REVIEW_TITLE) heading.textContent = REVIEW_TITLE;
+  const info = section.querySelector('.bbrd-info');
+  if (info && info.getAttribute('title') !== REVIEW_HELP) info.setAttribute('title', REVIEW_HELP);
+  const select = section.querySelector('.bbrd-workflow');
+  if (select instanceof HTMLSelectElement) paintWorkflowPick(select, settings);
+  section.querySelector('.bbrd-workflow-panel')?.remove();
+  const edit = section.querySelector('.bbrd-workflow-edit');
+  if (edit instanceof HTMLButtonElement) {
+    edit.textContent = 'Edit';
+    edit.setAttribute('aria-expanded', editorOpen ? 'true' : 'false');
+  }
+  ensureDialog(panel.ownerDocument, settings, onChange);
+  return section;
+}
+
+/**
+ * @param {Document} doc
+ * @param {{ reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], reviewFilters?: import('../core/review-workflows.js').ReviewFilter[], activeReviewWorkflow?: st
