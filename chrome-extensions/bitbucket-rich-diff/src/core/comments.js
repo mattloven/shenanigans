@@ -377,4 +377,92 @@ function openCsString(line, index) {
   let verbatim = false;
   let interp = false;
   if (line[cursor] === '$') {
-    interp = true
+    interp = true;
+    cursor += 1;
+  }
+  if (line[cursor] === '@') {
+    verbatim = true;
+    cursor += 1;
+  }
+  if (line[cursor] === '$') {
+    interp = true;
+    cursor += 1;
+  }
+  cursor += 1; // opening quote
+  return { index: cursor, frame: { mode: verbatim ? 'string' : 'string', quote: '"', verbatim, interp } };
+}
+
+function isRegexStart(line, index) {
+  let cursor = index - 1;
+  while (cursor >= 0 && /\s/.test(line[cursor])) cursor -= 1;
+  if (cursor < 0) return true;
+  return !/[A-Za-z0-9_$)\]'"`]/.test(line[cursor]);
+}
+
+function consumeRegex(line, index) {
+  let charClass = false;
+  while (index < line.length) {
+    const ch = line[index];
+    if (ch === '\\') {
+      index += 2;
+      continue;
+    }
+    if (charClass) {
+      if (ch === ']') charClass = false;
+      index += 1;
+      continue;
+    }
+    if (ch === '[') {
+      charClass = true;
+      index += 1;
+      continue;
+    }
+    if (ch === '/') {
+      index += 1;
+      break;
+    }
+    index += 1;
+  }
+  while (index < line.length && /[a-z]/i.test(line[index])) index += 1;
+  return index;
+}
+
+/**
+ * Ranges to hide for one line.
+ * @param {{ start: number, end: number, kind: CommentKind }[]} ranges
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean }} opts
+ */
+export function hiddenIntervals(ranges, opts) {
+  return ranges.filter((range) => (range.kind === 'comment' && opts.hideCodeComments) || (range.kind === 'summary' && opts.hideSummaryComments));
+}
+
+/**
+ * A full summary line folds only when collapse is on and hide is off.
+ * Hide removes it with no bar. A full code-comment line still folds when code comments are hidden.
+ * @param {string} text
+ * @param {{ start: number, end: number, kind: CommentKind }[]} ranges
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean, collapseSummaryComments?: boolean }} opts
+ * @returns {{ hideLine: boolean, fold: boolean, intervals: { start: number, end: number }[] }}
+ */
+export function classifyCommentLine(text, ranges, opts) {
+  const summaryRanges = ranges.filter((range) => range.kind === 'summary');
+  const codeRanges = ranges.filter((range) => range.kind === 'comment');
+  const collapseSummary = !!opts.collapseSummaryComments && !opts.hideSummaryComments && lineIsFullyHidden(text, summaryRanges);
+  const foldCode = !!opts.hideCodeComments && lineIsFullyHidden(text, codeRanges);
+  const vanishSummary = !!opts.hideSummaryComments && lineIsFullyHidden(text, summaryRanges);
+  const fold = collapseSummary || foldCode;
+  const hideLine = fold || vanishSummary;
+  return { hideLine, fold, intervals: hideLine ? [] : hiddenIntervals(ranges, opts) };
+}
+
+/** True when the line has nothing left to read once those intervals are removed. */
+export function lineIsFullyHidden(line, intervals) {
+  if (intervals.length === 0) return false;
+  for (let i = 0; i < line.length; i++) {
+    if (/\s/.test(line[i])) continue;
+    if (!intervals.some((range) => i >= range.start && i < range.end)) return false;
+  }
+  return true;
+}
+
+function overl
