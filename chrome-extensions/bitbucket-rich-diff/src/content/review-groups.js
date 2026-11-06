@@ -217,4 +217,77 @@ function paintActions(section, summaries, files, reviewed, order) {
     head.append(actions);
   }
   const groups = activeWorkflow(lastMount?.settings).groups;
-  const continueId = continueTarget(activ
+  const continueId = continueTarget(activeGroup, summaries, order);
+  const continueButton = actions.querySelector('.bbrd-review-continue');
+  if (continueButton instanceof HTMLButtonElement) {
+    const nextName = continueId ? groups.find((group) => group.id === continueId)?.name ?? continueId : '';
+    const finished = !firstUnfinishedGroup(summaries, order);
+    const continueText = continueId ? `Continue to ${nextName}` : finished && !activeGroup ? 'Done' : 'Continue';
+    continueButton.disabled = !continueId;
+    if (continueButton.textContent !== continueText) continueButton.textContent = continueText;
+    continueButton.title = continueId
+      ? `Show ${nextName}`
+      : finished && !activeGroup
+        ? 'Every file is marked viewed'
+        : 'This is the last group';
+  }
+  const upcoming = nextUnviewed(files, reviewed, activeGroup, currentPath(section.ownerDocument), order);
+  if (!upcoming) unviewedOnly = false;
+  const nextSwitch = actions.querySelector('.bbrd-review-next');
+  if (nextSwitch instanceof HTMLInputElement) {
+    nextSwitch.checked = unviewedOnly;
+    nextSwitch.disabled = !upcoming;
+    nextSwitch.title = upcoming ? `Open ${upcoming.path}` : 'Every file in this view is marked viewed';
+    nextSwitch.closest('.bbrd-switch')?.classList.toggle('is-on', unviewedOnly);
+    nextSwitch.closest('.bbrd-switch')?.classList.toggle('is-disabled', !upcoming);
+  }
+}
+
+/**
+ * Next group for Continue: the following card when one is selected, else the first unfinished.
+ * @param {string | null} selected
+ * @param {{ group: string, count: number, viewed: number }[]} summaries
+ * @param {string[]} order
+ */
+function continueTarget(selected, summaries, order) {
+  if (selected) {
+    const index = order.indexOf(selected);
+    if (index < 0 || index >= order.length - 1) return null;
+    return order[index + 1];
+  }
+  return firstUnfinishedGroup(summaries, order);
+}
+
+/**
+ * @param {ReviewFile[]} files
+ * @param {Set<string>} reviewed
+ */
+/**
+ * @param {ReviewFile[]} files
+ * @param {Set<string>} reviewed
+ * @param {import('../core/review-workflows.js').WorkflowGroup[]} groups
+ */
+function summariesFor(files, reviewed, groups) {
+  return groups.map((group) => {
+    const rows = files.filter((file) => file.group === group.id);
+    return { group: group.id, count: rows.length, viewed: rows.filter((file) => reviewed.has(file.path)).length };
+  });
+}
+
+/** @param {ParentNode} root */
+function currentPath(root) {
+  const doc = root.nodeType === 9 ? root : root.ownerDocument;
+  const hash = doc?.defaultView?.location?.hash ?? '';
+  const fromHash = normalizePath(pathFromFileLink(hash));
+  if (fromHash) return fromHash;
+  for (const article of findFileDiffs(root)) {
+    if (article.classList.contains('bbrd-group-hidden')) continue;
+    const path = normalizePath(getFilePath(article));
+    if (path) return path;
+  }
+  return null;
+}
+
+/**
+ * @param {HTMLElement} panel
+ * @param {{ reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], activeReviewWorkflow?: string }} settin
