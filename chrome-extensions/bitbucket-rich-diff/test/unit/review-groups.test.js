@@ -144,6 +144,17 @@ describe('mountReviewGroups', () => {
     const infrastructureCard = document.querySelector('[data-group="infrastructure"]');
     expect(infrastructureCard.getAttribute('aria-pressed')).toBe('true');
     expect(infrastructureCard.querySelector('.bbrd-group-state').textContent).toBe('Showing');
+    expect(continueButton.textContent).toBe('Continue to Business');
+    expect(continueButton.disabled).toBe(false);
+    expect(document.querySelector('a[href="#chg-src/appsettings.json"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(false);
+    expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(true);
+    continueButton.click();
+    expect(document.querySelector('[data-group="business"]').getAttribute('aria-pressed')).toBe('true');
+    expect(continueButton.textContent).toBe('Continue to Tests');
+    document.querySelector('[data-group="docs"]').click();
+    expect(document.querySelector('[data-group="docs"]').getAttribute('aria-pressed')).toBe('true');
+    expect(continueButton.disabled).toBe(true);
+    expect(continueButton.textContent).toBe('Continue');
   });
 
   it('hides the section and clears a selected group', () => {
@@ -192,20 +203,11 @@ describe('review workflows', () => {
     expect(assignGroup('docs/LICENSE', sample)).toBe('docs');
     expect(assignGroup('src/App.cs', sample)).toBe('business');
     const custom = [
-      { id: 'sql', name: 'SQL', color: '#ae2e24', filter: 'pattern', pattern: String.raw`\.sql$` },
+      { id: 'sql', name: 'SQL', color: '#ae2e24', filter: 'pattern', pattern: String.raw`\\.sql$` },
       { id: 'other', name: 'Other', color: '#206a83', filter: 'rest', pattern: '' },
     ];
     expect(assignGroup('db/migrate.sql', custom)).toBe('sql');
     expect(assignGroup('src/App.cs', custom)).toBe('other');
-  });
-
-  it('shows the selected workflow and saves a new group', () => {
-    document.body.innerHTML = `
-      <section class="bbrd-stats"></section>
-      <ul id="file-tree">
-        <li><a href="#chg-db/migrate.sql">migrate.sql</a></li>
-        <li><a href="#chg-src/App.cs">App.cs</a></li>
-      </ul>`;
     const settings = {
       reviewWorkflows: [
         dotnetWorkflow(),
@@ -213,7 +215,7 @@ describe('review workflows', () => {
           id: 'sql',
           name: 'SQL pass',
           groups: [
-            { id: 'sql', name: 'SQL', color: '#ae2e24', filter: 'pattern', pattern: String.raw`\.sql$` },
+            { id: 'sql', name: 'SQL', color: '#ae2e24', filter: 'pattern', pattern: String.raw`\\.sql$` },
             { id: 'other', name: 'Other', color: '#206a83', filter: 'rest', pattern: '' },
           ],
         },
@@ -233,7 +235,7 @@ describe('review workflows', () => {
     const dialog = document.querySelector('.bbrd-dialog');
     expect(dialog.getAttribute('role')).toBe('dialog');
     expect(dialog.querySelector('h2').textContent).toBe('Edit workflow');
-    expect(document.querySelector('.bbrd-pattern').value).toBe(String.raw`\.sql$`);
+    expect(document.querySelector('.bbrd-pattern').value).toBe(String.raw`\\.sql$`);
     document.querySelector('[data-act="add-group"]').click();
     expect(saved.at(-1).reviewWorkflows.find((workflow) => workflow.id === 'sql').groups).toHaveLength(3);
     document.querySelectorAll('.bbrd-group-edit [data-act="up"]')[1].click();
