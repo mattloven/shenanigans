@@ -265,3 +265,116 @@ function scanXmlLine(line, state) {
       continue;
     }
     if (line.startsWith('<!--', index)) {
+      if (index > start) ranges.push({ start, end: index, kind });
+      stack.push({ mode: 'markup' });
+      start = index;
+      kind = 'comment';
+      index += 4;
+      continue;
+    }
+    index += 1;
+  }
+
+  if (index > start) ranges.push({ start, end: index, kind });
+  else if (kind !== 'code') ranges.push({ start: 0, end: 0, kind });
+  return { ranges, state: { stack } };
+}
+
+/**
+ * Hash line comments (# …) for Docker, Makefile, ini/toml/cfg/env/gitignore, and YAML.
+ * A # inside a single- or double-quoted string is left alone; quote state can span lines.
+ */
+function scanHashLine(line, state) {
+  const stack = state.stack.map((frame) => ({ ...frame }));
+  /** @type {{ start: number, end: number, kind: CommentKind }[]} */
+  const ranges = [];
+  let index = 0;
+  let kind = kindOf(stack);
+  let start = 0;
+
+  const sync = (next) => {
+    const nextKind = kindOf(stack);
+    if (nextKind !== kind) {
+      if (next > start) ranges.push({ start, end: next, kind });
+      start = next;
+      kind = nextKind;
+    }
+    index = next;
+  };
+
+  while (index < line.length) {
+    const top = stack[stack.length - 1];
+    const ch = line[index];
+
+    if (top.mode === 'string') {
+      if (ch === '\\') {
+        index += 2;
+        continue;
+      }
+      if (ch === top.quote) {
+        index += 1;
+        stack.pop();
+        sync(index);
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      index += 1;
+      stack.push({ mode: 'string', quote: ch });
+      continue;
+    }
+    if (ch === '#') {
+      if (index > start) ranges.push({ start, end: index, kind });
+      ranges.push({ start: index, end: line.length, kind: 'comment' });
+      return { ranges, state: { stack } };
+    }
+    index += 1;
+  }
+
+  if (index > start) ranges.push({ start, end: index, kind });
+  else if (kind !== 'code') ranges.push({ start: 0, end: 0, kind });
+  return { ranges, state: { stack } };
+}
+
+function kindOf(stack) {
+  const top = stack[stack.length - 1];
+  if (top.mode === 'block' || top.mode === 'markup') return top.summary ? 'summary' : 'comment';
+  return 'code';
+}
+
+/** @param {never} value */
+function assertNever(value) {
+  throw new Error(`Unknown comment language: ${String(value)}`);
+}
+
+/** @param {string} line @param {number} index position of @ or $ */
+function startsCsString(line, index) {
+  const rest = line.slice(index);
+  return /^(?:\$@|@\$|@|\$)"/.test(rest);
+}
+
+/** A C# character literal, including '"' and '\'' so the quote cannot open a string. */
+function consumeCsChar(line, index) {
+  index += 1;
+  if (index >= line.length) return index;
+  if (line[index] === '\\') {
+    const escape = line[index + 1];
+    index += 2;
+    if (escape === 'u') index += 4;
+    else if (escape === 'U') index += 8;
+  } else {
+    index += 1;
+  }
+  if (line[index] === "'") index += 1;
+  return index;
+}
+
+function openCsString(line, index) {
+  let cursor = index;
+  let verbatim = false;
+  let interp = false;
+  if (line[cursor] === '$') {
+    interp = true
