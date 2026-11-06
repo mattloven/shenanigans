@@ -91,4 +91,21 @@ remembered):
 
 ### JSON: Tree (plain)
 
-The sa
+The same **Old · New · Side by side** switch as the Markdown preview, showing collapsible trees
+(opened two levels deep). In side-by-side mode, expanding or collapsing a node on one side does the
+same on the other. A parse error affects only its own pane.
+
+### File list filters
+
+A **Hide** button sits in the top right of the summary bar above the file tree and the diff. It opens one menu. The same controls are in the extension settings:
+
+- **Hide .md files.** Also hides `.markdown`, `.mdown`, `.mkd` and `.mkdn`. The file disappears from the list and from the diff.
+- **Hide extensions.** A text field such as `.svg, .lock, .min.js`. A file matches when its path ends with one of those suffixes.
+- **Hide test projects.** Hides every file inside a folder whose name ends in `Tests`, such as `Foo.Tests`, `Foo.UnitTests` and `Foo.IntegrationTests`.
+- **Hide solution and project files.** `.sln`, `.slnx`, `.slnf`, and every MSBuild project type (`.csproj`, `.fsproj`, `.vbproj`, `.vcxproj`, and the rest of `*proj`).
+- **Hide generated files.** Lockfiles, `*.min.js`, `*.min.css`, and generated C# such as `*.Designer.cs` and `*.g.cs`.
+- **Hide comment-only files.** A file whose added and removed lines are all comments.
+- **Hide pattern.** A regular expression tested against the full path, each folder name, and the file name. An invalid pattern hides nothing.
+- Hidden files stay in the page. The Hide flyout (opened from the summary bar) shows the breakdown — how many files, which category, and the `+ −` counts — at the bottom of the menu, with **Show** / **Hide** to bring them back for this visit. Nothing is inserted into the file tree for that summary: Bitbucket re-renders the sidebar and would duplicate any node we add there. A folder these rules hide keeps its **Hidden** pill, and a revealed file keeps its category pill. Both sit in front of the folder or file icon, on the same row. Each kind has its own colour: tests purple, projects teal, generated orange, docs green, comments grey, extensions yellow, pattern red, and Hidden blue.
+- **Hide review path.** Hides the Review path section under the summary tiles. The file hide rules keep working.
+- Under the summary tiles, **Review path** is a heading with an info button, a workflow menu, and **Edit**. The menu chooses which saved workflow is shown. **Edit** opens a dialog, and the extension settings have the same editor. Each group has a name, a colour, an order, and a saved pattern. Several workflows can be saved. The choice is stored with the other extension settings and used on every pull request. **.NET Workflow** is the sample. Its groups use editable patterns, not built-in categories: **Infrastructure** (Terraform, Cake, Docker, git and env files, YAML, appsettings, project files, lockfiles, and it skips a `*Tests` folder), **Business** (remaining files), **Tests** (a `*Tests` folder, or a test/spec file), and **Documentation** (Markdown and readme, license, changelog). Patterns are case-insensitive regular e
