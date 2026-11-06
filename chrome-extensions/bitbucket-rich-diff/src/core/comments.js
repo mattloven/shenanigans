@@ -465,4 +465,93 @@ export function lineIsFullyHidden(line, intervals) {
   return true;
 }
 
-function overl
+function overlap(a, b) {
+  const out = [];
+  for (const left of a) {
+    for (const right of b) {
+      const start = Math.max(left.start, right.start);
+      const end = Math.min(left.end, right.end);
+      if (start < end) out.push({ start, end });
+    }
+  }
+  return out;
+}
+
+/**
+ * Walks diff rows in display order, keeping separate lexing state for the old and new sides.
+ * Context rows are hidden only where both sides agree.
+ *
+ * @param {Array<{ type: '+' | '-' | ' ', text: string }>} rows
+ * @param {CommentLanguage} language
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean }} opts
+ * @returns {Array<{ hideLine: boolean, intervals: { start: number, end: number }[] }>}
+ */
+export function classifyDiffRows(rows, language, opts) {
+  let oldState = initialCommentState();
+  let newState = initialCommentState();
+  return rows.map((row) => {
+    if (row.type === '-') {
+      const scanned = scanLine(row.text, oldState, language);
+      oldState = scanned.state;
+      return classifyCommentLine(row.text, scanned.ranges, opts);
+    }
+    if (row.type === '+') {
+      const scanned = scanLine(row.text, newState, language);
+      newState = scanned.state;
+      return classifyCommentLine(row.text, scanned.ranges, opts);
+    }
+    const oldScan = scanLine(row.text, oldState, language);
+    const newScan = scanLine(row.text, newState, language);
+    oldState = oldScan.state;
+    newState = newScan.state;
+    const oldLine = classifyCommentLine(row.text, oldScan.ranges, opts);
+    const newLine = classifyCommentLine(row.text, newScan.ranges, opts);
+    return {
+      hideLine: oldLine.hideLine && newLine.hideLine,
+      fold: oldLine.fold && newLine.fold,
+      intervals: overlap(oldLine.intervals, newLine.intervals),
+    };
+  });
+}
+
+function columnSpacer(cell, other, oppositeChange) {
+  return !!cell && !!other && cell.type === ' ' && cell.text.trim() === '' && other.type === oppositeChange;
+}
+
+/**
+ * Side-by-side diffs put the old line and the new line in the same visual row.
+ * Each column is its own lex stream. A blank cell opposite an added or removed
+ * line is padding, not a source line.
+ *
+ * @param {Array<{ cells: Array<{ type: '+' | '-' | ' ', text: string }> }>} rows
+ * @param {CommentLanguage} language
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean }} opts
+ * @returns {Array<Array<{ hideLine: boolean, intervals: { start: number, end: number }[] }>>}
+ */
+export function classifySideBySideRows(rows, language, opts) {
+  let oldState = initialCommentState();
+  let newState = initialCommentState();
+  const shown = () => ({ hideLine: false, fold: false, intervals: [] });
+  return rows.map(({ cells }) => {
+    const [left, right] = cells;
+    /** @type {Array<{ hideLine: boolean, fold: boolean, intervals: { start: number, end: number }[] }>} */
+    const out = [];
+    if (left) {
+      if (columnSpacer(left, right, '+')) out.push(shown());
+      else {
+        const scanned = scanLine(left.text, oldState, language);
+        oldState = scanned.state;
+        out.push(classifyCommentLine(left.text, scanned.ranges, opts));
+      }
+    }
+    if (right) {
+      if (columnSpacer(right, left, '-')) out.push(shown());
+      else {
+        const scanned = scanLine(right.text, newState, language);
+        newState = scanned.state;
+        out.push(classifyCommentLine(right.text, scanned.ranges, opts));
+      }
+    }
+    return out;
+  });
+}
