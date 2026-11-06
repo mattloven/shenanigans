@@ -93,7 +93,8 @@ describe('updateCommentMasks', () => {
     updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: true });
     const rows = [...el.querySelectorAll('[data-key="code-line"]')];
     const hidden = (row) => [...row.querySelectorAll('[data-qa="code-line"]')].map((line) => line.classList.contains('bbrd-hide-line'));
-    expect(hidden(rows[0])).toEqual([false, true]);
+    // Folded runs hide every side, including the blank partner column.
+    expect(hidden(rows[0])).toEqual([true, true]);
     expect(hidden(rows[1])).toEqual([true, false]);
     expect(rows[1].querySelector('.bbrd-hide-comment').textContent).toBe('// trailing');
     expect(hidden(rows[2])).toEqual([true, true]);
@@ -101,7 +102,9 @@ describe('updateCommentMasks', () => {
     const folds = [...el.querySelectorAll('.bbrd-comment-fold')];
     expect(folds).toHaveLength(1);
     expect(folds[0].querySelector('.bbrd-fold-pill').textContent).toBe('Comments - 1 line');
+    expect(folds[0].getAttribute('aria-expanded')).toBe('false');
     expect(rows[0].classList.contains('bbrd-hide-line')).toBe(true);
+    expect(rows[0].classList.contains('bbrd-comment-open')).toBe(false);
     expect(rows[2].classList.contains('bbrd-hide-line')).toBe(true);
     expect(rows[2].querySelector('.bbrd-comment-fold, .bbrd-fold-line')).toBeNull();
     el.remove();
