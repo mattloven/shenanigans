@@ -85,4 +85,105 @@ export function updateCommentMasks(root, settings) {
       }
       continue;
     }
-    // Syntax highlighting 
+    // Syntax highlighting rewrites the cell after we mask it. The line text stays the
+    // same, so the signature matches, but the mask marker is gone and has to be put back.
+    if (article.getAttribute('data-bbrd-comments') === signature && masksIntact(rows)) {
+      concealVanishedRows(article);
+      foldCommentRuns(article, getFilePath(article));
+      continue;
+    }
+    clearCommentMasks(article);
+    for (const fold of article.querySelectorAll('.bbrd-comment-fold')) fold.remove();
+    article.removeAttribute('data-bbrd-folds');
+    if (signature !== 'off') maskArticle(rows, language, settings);
+    article.setAttribute('data-bbrd-comments', signature);
+    concealVanishedRows(article);
+    foldCommentRuns(article, getFilePath(article));
+  }
+}
+
+/** Paths whose every added or removed line is a fully hidden comment. */
+export function commentOnlyPaths(root) {
+  const paths = new Set();
+  for (const article of findFileDiffs(root)) {
+    let changed = 0;
+    let hidden = 0;
+    for (const row of article.querySelectorAll('[data-key="code-line"]')) {
+      const isChange = [...row.querySelectorAll('[data-line-type]')].some((cell) => {
+        const type = cell.getAttribute('data-line-type');
+        return type === '+' || type === '-';
+      });
+      if (!isChange) continue;
+      changed += 1;
+      if (row.classList.contains('bbrd-hide-line')) hidden += 1;
+    }
+    if (changed > 0 && hidden === changed) {
+      const path = getFilePath(article);
+      if (path) paths.add(path);
+    }
+  }
+  return paths;
+}
+
+/** @type {Set<string>} */
+const openCommentFolds = new Set();
+
+function setCommentOpen(rows, open) {
+  for (const row of rows) {
+    row.classList.toggle('bbrd-comment-open', open);
+    // Side-by-side cells carry hide/fold on the inner line; keep those in sync too.
+    for (const inner of row.querySelectorAll('.bbrd-hide-line, .bbrd-fold-line')) {
+      inner.classList.toggle('bbrd-comment-open', open);
+    }
+  }
+}
+
+function foldKey(path, index, run) {
+  return `${path}\n${index}\n${(run[0].textContent ?? '').slice(0, 40)}`;
+}
+
+function syncCommentFold(fold, run, key) {
+  const open = openCommentFolds.has(key);
+  fold.setAttribute('aria-expanded', open ? 'true' : 'false');
+  setCommentOpen(run, open);
+  for (const row of run) {
+    row.classList.add('bbrd-hide-line');
+    // Blank side-by-side partners must hide with the run, not only the commented cell.
+    for (const line of row.querySelectorAll('[data-qa="code-line"]')) line.classList.add('bbrd-hide-line');
+  }
+  // Visibility inside a collapsed test is handled by CSS :has(+ .bbrd-test-collapsed)
+  // so expanding the test shows the pill again without a rescan.
+  fold.classList.remove('bbrd-test-collapsed');
+}
+
+function foldCommentRuns(article, path) {
+  const rows = [...article.querySelectorAll('[data-key="code-line"]')];
+  /** @type {HTMLElement[][]} */
+  const runs = [];
+  /** @type {HTMLElement[]} */
+  let current = [];
+  for (const row of rows) {
+    if (isFoldedCommentRow(row)) current.push(row);
+    else if (current.length) {
+      runs.push(current);
+      current = [];
+    }
+  }
+  if (current.length) runs.push(current);
+  const signature = runs.map((run) => run.length).join(',');
+  const existing = [...article.querySelectorAll('.bbrd-comment-fold')];
+  // Bitbucket may rewrite row className while leaving our fold buttons and mask
+  // markers in place. Re-apply hide/open whenever the run shape still matches.
+  if (article.getAttribute('data-bbrd-folds') === signature && existing.length === runs.length) {
+    const hidden = runs.every((run) => run.every((row) => row.classList.contains('bbrd-hide-line')));
+    if (hidden) {
+      runs.forEach((run, index) => syncCommentFold(existing[index], run, foldKey(path, index, run)));
+      return;
+    }
+  }
+  for (const fold of existing) fold.remove();
+  runs.forEach((run, index) => {
+    const key = foldKey(path, index, run);
+    const fold = document.createElement('button');
+    fold.type = 'button';
+    fold.className = 'bbrd-comment-fold
