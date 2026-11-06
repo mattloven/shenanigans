@@ -1,0 +1,2 @@
+probe:String.raw`\.sql$`
+probe2:one\two
