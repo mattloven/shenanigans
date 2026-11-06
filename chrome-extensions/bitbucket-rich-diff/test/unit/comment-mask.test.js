@@ -48,3 +48,160 @@ describe('updateCommentMasks', () => {
     expect(fold.querySelector('.bbrd-fold-pill').textContent).toBe('Comments - 1 line');
 
     updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: true });
+    expect(el.querySelector('[data-key="code-line"]:last-child').classList.contains('bbrd-hide-line')).toBe(true);
+
+    updateCommentMasks(document, { hideCodeComments: false, hideSummaryComments: false });
+    expect(el.querySelector('.bbrd-hide-line, .bbrd-hide-comment')).toBeNull();
+    expect(el.querySelector('[data-line-type="+"]').textContent).toContain('// trailing');
+    el.remove();
+  });
+
+  it('folds summary comments only when collapse is on, and hides them with no bar otherwise', () => {
+    const el = article('src/Payment.cs', [
+      ['+', '    /// <summary>Docs.</summary>'],
+      ['+', '    var a = 1;'],
+    ]);
+    updateCommentMasks(document, { hideCodeComments: false, hideSummaryComments: false, collapseSummaryComments: true });
+    expect(el.querySelector('.bbrd-fold-pill').textContent).toBe('Comments - 1 line');
+    expect(el.querySelector('[data-key="code-line"]').classList.contains('bbrd-fold-line')).toBe(true);
+
+    updateCommentMasks(document, { hideCodeComments: false, hideSummaryComments: true, collapseSummaryComments: true });
+    expect(el.querySelector('.bbrd-comment-fold')).toBeNull();
+    expect(el.querySelector('[data-key="code-line"]').classList.contains('bbrd-hide-line')).toBe(true);
+    expect(el.querySelector('.bbrd-fold-line')).toBeNull();
+    el.remove();
+  });
+
+  it('hides each side of a side-by-side C# row on its own', () => {
+    const el = document.createElement('article');
+    el.dataset.qa = 'branch-diff-file';
+    el.setAttribute('aria-label', 'Diff of file src/Payment.cs');
+    el.innerHTML = `
+      <div data-key="code-line" role="row">
+        <div data-qa="code-line"><span role="gridcell" data-line-type=" "></span></div>
+        <div data-qa="code-line"><span role="gridcell" data-line-type="+">    // new note</span></div>
+      </div>
+      <div data-key="code-line" role="row">
+        <div data-qa="code-line"><span role="gridcell" data-line-type="-">    // old note</span></div>
+        <div data-qa="code-line"><span role="gridcell" data-line-type="+">    var a = 1; // trailing</span></div>
+      </div>
+      <div data-key="code-line" role="row">
+        <div data-qa="code-line"><span role="gridcell" data-line-type=" ">    /// <summary>Docs.</summary></span></div>
+        <div data-qa="code-line"><span role="gridcell" data-line-type=" ">    /// <summary>Docs.</summary></span></div>
+      </div>`;
+    document.body.append(el);
+    updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: true });
+    const rows = [...el.querySelectorAll('[data-key="code-line"]')];
+    const hidden = (row) => [...row.querySelectorAll('[data-qa="code-line"]')].map((line) => line.classList.contains('bbrd-hide-line'));
+    // Folded runs hide every side, including the blank partner column.
+    expect(hidden(rows[0])).toEqual([true, true]);
+    expect(hidden(rows[1])).toEqual([true, false]);
+    expect(rows[1].querySelector('.bbrd-hide-comment').textContent).toBe('// trailing');
+    expect(hidden(rows[2])).toEqual([true, true]);
+    expect(rows[2].classList.contains('bbrd-hide-line')).toBe(true);
+    const folds = [...el.querySelectorAll('.bbrd-comment-fold')];
+    expect(folds).toHaveLength(1);
+    expect(folds[0].querySelector('.bbrd-fold-pill').textContent).toBe('Comments - 1 line');
+    expect(folds[0].getAttribute('aria-expanded')).toBe('false');
+    expect(rows[0].classList.contains('bbrd-hide-line')).toBe(true);
+    expect(rows[0].classList.contains('bbrd-comment-open')).toBe(false);
+    expect(rows[2].classList.contains('bbrd-hide-line')).toBe(true);
+    expect(rows[2].querySelector('.bbrd-comment-fold, .bbrd-fold-line')).toBeNull();
+    el.remove();
+  });
+
+  it('puts the mask back after syntax highlighting rewrites the cell', () => {
+    const el = article('src/Payment.cs', [[' ', '    // ReSharper disable once InconsistentNaming']]);
+    updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: false });
+    const cell = el.querySelector('[data-line-type]');
+    cell.innerHTML = '<span class="token comment">    // ReSharper disable once InconsistentNaming</span>';
+    updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: false });
+    expect(el.querySelector('[data-key="code-line"]').classList.contains('bbrd-hide-line')).toBe(true);
+    el.remove();
+  });
+
+  it('toggles a collapsed comment run open and shut from the pill', () => {
+    const el = article('src/Payment.cs', [
+      ['+', '    /// <summary>Docs.</summary>'],
+      ['+', '    /// more'],
+      ['+', '    var a = 1;'],
+    ]);
+    updateCommentMasks(document, { hideCodeComments: false, hideSummaryComments: false, collapseSummaryComments: true });
+    const fold = el.querySelector('.bbrd-comment-fold');
+    const rows = [...el.querySelectorAll('[data-key="code-line"]')];
+    expect(fold.getAttribute('aria-expanded')).toBe('false');
+    expect(fold.querySelector('.bbrd-fold-pill').textContent).toBe('Comments - 2 lines');
+    expect(rows[0].classList.contains('bbrd-hide-line')).toBe(true);
+    expect(rows[0].classList.contains('bbrd-comment-open')).toBe(false);
+    expect(rows[1].classList.contains('bbrd-comment-open')).toBe(false);
+
+    fold.click();
+    expect(fold.getAttribute('aria-expanded')).toBe('true');
+    expect(rows[0].classList.contains('bbrd-comment-open')).toBe(true);
+    expect(rows[1].classList.contains('bbrd-comment-open')).toBe(true);
+
+    fold.click();
+    expect(fold.getAttribute('aria-expanded')).toBe('false');
+    expect(rows[0].classList.contains('bbrd-comment-open')).toBe(false);
+    expect(rows[1].classList.contains('bbrd-comment-open')).toBe(false);
+    expect(rows[0].classList.contains('bbrd-hide-line')).toBe(true);
+    el.remove();
+  });
+
+  it('re-hides both sides of a side-by-side run after Bitbucket clears row classes', () => {
+    const el = document.createElement('article');
+    el.dataset.qa = 'branch-diff-file';
+    el.setAttribute('aria-label', 'Diff of file src/Payment.cs');
+    el.innerHTML = `
+      <div data-key="code-line" role="row">
+        <div data-qa="code-line"><span role="gridcell" data-line-type=" "></span></div>
+        <div data-qa="code-line"><span role="gridcell" data-line-type="+">    /// <summary>Docs.</summary></span></div>
+      </div>
+      <div data-key="code-line" role="row">
+        <div data-qa="code-line"><span role="gridcell" data-line-type=" "></span></div>
+        <div data-qa="code-line"><span role="gridcell" data-line-type="+">    var a = 1;</span></div>
+      </div>`;
+    document.body.append(el);
+    updateCommentMasks(document, { hideCodeComments: false, hideSummaryComments: false, collapseSummaryComments: true });
+    const row = el.querySelector('[data-key="code-line"]');
+    const sides = [...row.querySelectorAll('[data-qa="code-line"]')];
+    expect(row.classList.contains('bbrd-hide-line')).toBe(true);
+    expect(sides.every((side) => side.classList.contains('bbrd-hide-line'))).toBe(true);
+    expect(el.querySelector('.bbrd-comment-fold').getAttribute('aria-expanded')).toBe('false');
+
+    // Simulate Bitbucket rewriting className on the row and cells while leaving mask
+    // markers and the fold-expect attribute (attributes survive className writes).
+    row.className = 'lines-wrapper';
+    sides.forEach((side) => {
+      side.className = side.querySelector('[data-line-type="+"]') ? 'line-wrapper type-add' : 'line-wrapper type-empty';
+    });
+    expect(sides[1].hasAttribute('data-bbrd-fold-expect')).toBe(true);
+    expect(sides[1].classList.contains('bbrd-fold-line')).toBe(false);
+    updateCommentMasks(document, { hideCodeComments: false, hideSummaryComments: false, collapseSummaryComments: true });
+    const restored = el.querySelector('[data-key="code-line"]');
+    expect(restored.classList.contains('bbrd-hide-line')).toBe(true);
+    expect(restored.classList.contains('bbrd-comment-open')).toBe(false);
+    expect([...restored.querySelectorAll('[data-qa="code-line"]')].every((side) => side.classList.contains('bbrd-hide-line'))).toBe(true);
+    expect(el.querySelector('.bbrd-comment-fold').getAttribute('aria-expanded')).toBe('false');
+    el.remove();
+  });
+
+  it('keeps a comment fold free of bbrd-test-collapsed so CSS can track the neighbouring test', () => {
+    const el = article('src/Payment.Tests/PaymentTests.cs', [
+      ['+', '    // inside the test'],
+      ['+', '    Assert.True(true);'],
+    ]);
+    updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: false, collapseSummaryComments: false });
+    const fold = el.querySelector('.bbrd-comment-fold');
+    const row = el.querySelector('[data-key="code-line"]');
+    // Simulate a stale class left on a rebuilt pill, then a scan after the test collapses.
+    fold.classList.add('bbrd-test-collapsed');
+    row.classList.add('bbrd-test-collapsed');
+    updateCommentMasks(document, { hideCodeComments: true, hideSummaryComments: false, collapseSummaryComments: false });
+    const next = el.querySelector('.bbrd-comment-fold');
+    expect(next.classList.contains('bbrd-test-collapsed')).toBe(false);
+    expect(next.nextElementSibling.classList.contains('bbrd-test-collapsed')).toBe(true);
+    expect(next.getAttribute('aria-expanded')).toBe('false');
+    el.remove();
+  });
+});
