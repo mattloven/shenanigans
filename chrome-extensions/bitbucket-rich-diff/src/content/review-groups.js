@@ -50,4 +50,63 @@ export function activeReviewGroup() {
  * @param {ParentNode} root
  * @param {{ workspace: string, repo: string, prId: number } | null} [pr]
  * @param {Storage | null} [storage]
- * @param {{ hideReviewGroups?: boolean, reviewWorkflows?: import('../core/review-workflows.js')
+ * @param {{ hideReviewGroups?: boolean, reviewWorkflows?: import('../core/review-workflows.js').ReviewWorkflow[], activeReviewWorkflow?: string }} [settings]
+ * @param {WorkflowChange | null} [onChange]
+ */
+export function mountReviewGroups(root, pr = null, storage = null, settings = {}, onChange = null) {
+  const doc = root.nodeType === 9 ? root : root.ownerDocument ?? document;
+  const store = storage ?? doc.defaultView?.localStorage ?? null;
+  const panel = doc.querySelector('.bbrd-stats');
+  if (!panel) return;
+  ensureWorkflowOpen(doc);
+  const state = workflowState(settings);
+  const workflow = state.reviewWorkflows.find((item) => item.id === state.activeReviewWorkflow) ?? state.reviewWorkflows[0];
+  const filters = state.reviewFilters;
+  if (shownWorkflow && shownWorkflow !== workflow.id) activeGroup = null;
+  shownWorkflow = workflow.id;
+  const files = filesIn(root, workflow.groups, filters);
+  const reviewed = reviewedPaths(root, pr, store);
+  lastMount = { root, pr, storage: store, settings, files, reviewed, onChange };
+  if (settings.hideReviewGroups) {
+    activeGroup = null;
+    unviewedOnly = false;
+    editorOpen = false;
+    panel.querySelector('.bbrd-review')?.remove();
+    panel.querySelector(':scope > .bbrd-groups')?.remove();
+    applyGroupFilter(root, files, workflow.groups, reviewed, filters);
+    closeWorkflowDialog(doc);
+    return;
+  }
+  const section = ensureSection(panel, settings, onChange);
+  const bar = section.querySelector('.bbrd-groups');
+  if (bar) wireGroupBar(bar);
+  const ids = new Set(workflow.groups.map((group) => group.id));
+  for (const button of bar ? [...bar.querySelectorAll('.bbrd-group')] : []) {
+    if (!ids.has(button.dataset.group ?? '')) button.remove();
+  }
+  if (activeGroup && !files.some((file) => file.group === activeGroup)) activeGroup = null;
+  /** @type {{ group: string, count: number, viewed: number }[]} */
+  const summaries = [];
+  for (const group of workflow.groups) {
+    const rows = files.filter((file) => file.group === group.id);
+    const viewed = rows.filter((file) => reviewed.has(file.path)).length;
+    const added = rows.reduce((sum, file) => sum + file.added, 0);
+    const removed = rows.reduce((sum, file) => sum + file.removed, 0);
+    summaries.push({ group: group.id, count: rows.length, viewed });
+    paintGroup(bar, group, filters, rows.length, viewed, added, removed);
+    const painted = bar?.querySelector(`[data-group="${group.id}"]`);
+    if (painted) bar?.append(painted);
+  }
+  paintActions(section, summaries, files, reviewed, workflow.groups.map((group) => group.id));
+  applyGroupFilter(root, files, workflow.groups, reviewed, filters);
+}
+
+/** One listener on the bar keeps group toggles working after cards are rebuilt. */
+function wireGroupBar(bar) {
+  if (bar.dataset.bbrdGroupClicks === '1') return;
+  bar.dataset.bbrdGroupClicks = '1';
+  bar.addEventListener('click', (event) => {
+    const node = event.target;
+    const target = node && node.nodeType === 1 ? node : node?.parentElement;
+    if (!target || typeof target.closest !== 'function') return;
+    const but
