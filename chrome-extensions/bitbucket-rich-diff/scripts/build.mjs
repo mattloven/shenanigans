@@ -8,7 +8,17 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outdir = path.join(root, 'dist');
 const watch = process.argv.includes('--watch');
 
-/** Expand land payloads so progressive MCP uploads can finish via zlib. */
+function readPayload(rel) {
+  const src = path.join(root, rel);
+  const p1 = src + '.p1';
+  const p2 = src + '.p2';
+  if (fs.existsSync(p1) && fs.existsSync(p2)) {
+    return fs.readFileSync(p1, 'utf8') + fs.readFileSync(p2, 'utf8');
+  }
+  if (fs.existsSync(src)) return fs.readFileSync(src, 'utf8');
+  return null;
+}
+
 function inflateLandPayloads() {
   const items = [
     ['.land-payload/page.css.zlib.b64', 'src/styles/page.css'],
@@ -16,9 +26,9 @@ function inflateLandPayloads() {
     ['.land-payload/SPEC.md.zlib.b64', 'SPEC.md'],
   ];
   for (const [from, to] of items) {
-    const src = path.join(root, from);
-    if (!fs.existsSync(src)) continue;
-    const raw = zlib.inflateSync(Buffer.from(fs.readFileSync(src, 'utf8').trim(), 'base64'));
+    const text = readPayload(from);
+    if (text == null) continue;
+    const raw = zlib.inflateSync(Buffer.from(text.trim(), 'base64'));
     fs.writeFileSync(path.join(root, to), raw);
   }
 }
