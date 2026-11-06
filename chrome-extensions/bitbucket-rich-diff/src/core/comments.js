@@ -1,1 +1,66 @@
-PLACEHOLDER_REPLACE_WITH_REAL
+/**
+ * Comment classification for source lines in diffs.
+ *
+ * "Code comments" are ordinary comments: slash-slash and slash-star, hash, and XML markup.
+ * "Summary comments" are documentation forms that only JS and C# define: triple-slash in C#,
+ * and slash-star-star JSDoc blocks in JS/TS and C#. New languages fold under Hide code comments.
+ *
+ * Diffs interleave removed and added lines, so old and new are scanned as two streams.
+ * A context line is only treated as a comment where BOTH streams agree.
+ */
+
+/** @typedef {'js' | 'cs' | 'xml' | 'jsonc' | 'hash' | 'hcl' | 'yaml'} CommentLanguage */
+/** @typedef {'code' | 'comment' | 'summary'} CommentKind */
+
+/**
+ * @typedef {object} Frame
+ * @property {'code' | 'block' | 'markup' | 'string' | 'template' | 'verbatim' | 'interp'} mode
+ * @property {boolean} [summary]     block comment is a summary/doc comment
+ * @property {string} [quote]        string delimiter
+ * @property {boolean} [verbatim]    C# verbatim string ("" escapes)
+ * @property {boolean} [interp]      C# interpolated string
+ * @property {boolean} [closeBrace]  this code frame is a string interpolation
+ * @property {number} [depth]        brace depth inside an interpolation
+ */
+
+/** @returns {{ stack: Frame[] }} */
+export function initialCommentState() {
+  return { stack: [{ mode: 'code', depth: 0 }] };
+}
+
+/** Path matchers kept next to commentLanguage so extension lists do not drift. */
+const JS_EXT = /\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/i;
+const CS_EXT = /\.(?:cs|cake)$/i;
+const XML_EXT = /\.(?:xml|csproj|fsproj|vbproj|vcxproj|proj|props|targets|nuspec|resx|config|svg)$/i;
+const JSONC_EXT = /\.(?:jsonc|json5|json)$/i;
+const HCL_EXT = /\.(?:tf|tfvars|hcl)$/i;
+const YAML_EXT = /\.(?:ya?ml)$/i;
+const HASH_EXT = /\.(?:ini|toml|cfg|gitignore|env|dockerignore)$/i;
+const DOCKERFILE = /(?:^|\/)(?:Dockerfile(?:\.[^/]*)?|[^/]+\.dockerfile)$/i;
+const MAKEFILE = /(?:^|\/)(?:GNUmakefile|Makefile|makefile)$/;
+
+/** @returns {CommentLanguage | null} */
+export function commentLanguage(path) {
+  if (!path) return null;
+  const text = String(path);
+  if (JS_EXT.test(text)) return 'js';
+  if (CS_EXT.test(text)) return 'cs';
+  if (XML_EXT.test(text)) return 'xml';
+  if (JSONC_EXT.test(text)) return 'jsonc';
+  if (HCL_EXT.test(text)) return 'hcl';
+  if (YAML_EXT.test(text)) return 'yaml';
+  if (HASH_EXT.test(text) || DOCKERFILE.test(text) || MAKEFILE.test(text)) return 'hash';
+  return null;
+}
+
+/**
+ * @param {string} line
+ * @param {{ stack: Frame[] }} state
+ * @param {CommentLanguage} language
+ * @returns {{ ranges: { start: number, end: number, kind: CommentKind }[], state: { stack: Frame[] } }}
+ */
+export function scanLine(line, state, language) {
+  if (language === 'xml') return scanXmlLine(line, state);
+  if (language === 'hash' || language === 'yaml') return scanHashLine(line, state);
+  if (language === 'jsonc') return scanSlashLine(line, state, { summaryDocs: false, hash: false, jsRegex: false, jsTemplate: false, cs: false });
+  if (language === 'h
