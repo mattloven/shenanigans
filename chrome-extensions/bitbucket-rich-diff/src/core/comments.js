@@ -299,3 +299,259 @@ function scanHashLine(line, state) {
       start = next;
       kind = nextKind;
     }
+    index = next;
+  };
+
+  while (index < line.length) {
+    const top = stack[stack.length - 1];
+    const ch = line[index];
+
+    if (top.mode === 'string') {
+      if (ch === '\\') {
+        index += 2;
+        continue;
+      }
+      if (ch === top.quote) {
+        index += 1;
+        stack.pop();
+        sync(index);
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      index += 1;
+      stack.push({ mode: 'string', quote: ch });
+      continue;
+    }
+    if (ch === '#') {
+      if (index > start) ranges.push({ start, end: index, kind });
+      ranges.push({ start: index, end: line.length, kind: 'comment' });
+      return { ranges, state: { stack } };
+    }
+    index += 1;
+  }
+
+  if (index > start) ranges.push({ start, end: index, kind });
+  else if (kind !== 'code') ranges.push({ start: 0, end: 0, kind });
+  return { ranges, state: { stack } };
+}
+
+function kindOf(stack) {
+  const top = stack[stack.length - 1];
+  if (top.mode === 'block' || top.mode === 'markup') return top.summary ? 'summary' : 'comment';
+  return 'code';
+}
+
+/** @param {never} value */
+function assertNever(value) {
+  throw new Error(`Unknown comment language: ${String(value)}`);
+}
+
+/** @param {string} line @param {number} index position of @ or $ */
+function startsCsString(line, index) {
+  const rest = line.slice(index);
+  return /^(?:\$@|@\$|@|\$)"/.test(rest);
+}
+
+/** A C# character literal, including '"' and '\'' so the quote cannot open a string. */
+function consumeCsChar(line, index) {
+  index += 1;
+  if (index >= line.length) return index;
+  if (line[index] === '\\') {
+    const escape = line[index + 1];
+    index += 2;
+    if (escape === 'u') index += 4;
+    else if (escape === 'U') index += 8;
+  } else {
+    index += 1;
+  }
+  if (line[index] === "'") index += 1;
+  return index;
+}
+
+function openCsString(line, index) {
+  let cursor = index;
+  let verbatim = false;
+  let interp = false;
+  if (line[cursor] === '$') {
+    interp = true;
+    cursor += 1;
+  }
+  if (line[cursor] === '@') {
+    verbatim = true;
+    cursor += 1;
+  }
+  if (line[cursor] === '$') {
+    interp = true;
+    cursor += 1;
+  }
+  cursor += 1; // opening quote
+  return { index: cursor, frame: { mode: verbatim ? 'string' : 'string', quote: '"', verbatim, interp } };
+}
+
+function isRegexStart(line, index) {
+  let cursor = index - 1;
+  while (cursor >= 0 && /\s/.test(line[cursor])) cursor -= 1;
+  if (cursor < 0) return true;
+  return !/[A-Za-z0-9_$)\]'"`]/.test(line[cursor]);
+}
+
+function consumeRegex(line, index) {
+  let charClass = false;
+  while (index < line.length) {
+    const ch = line[index];
+    if (ch === '\\') {
+      index += 2;
+      continue;
+    }
+    if (charClass) {
+      if (ch === ']') charClass = false;
+      index += 1;
+      continue;
+    }
+    if (ch === '[') {
+      charClass = true;
+      index += 1;
+      continue;
+    }
+    if (ch === '/') {
+      index += 1;
+      break;
+    }
+    index += 1;
+  }
+  while (index < line.length && /[a-z]/i.test(line[index])) index += 1;
+  return index;
+}
+
+/**
+ * Ranges to hide for one line.
+ * @param {{ start: number, end: number, kind: CommentKind }[]} ranges
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean }} opts
+ */
+export function hiddenIntervals(ranges, opts) {
+  return ranges.filter((range) => (range.kind === 'comment' && opts.hideCodeComments) || (range.kind === 'summary' && opts.hideSummaryComments));
+}
+
+/**
+ * A full summary line folds only when collapse is on and hide is off.
+ * Hide removes it with no bar. A full code-comment line still folds when code comments are hidden.
+ * @param {string} text
+ * @param {{ start: number, end: number, kind: CommentKind }[]} ranges
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean, collapseSummaryComments?: boolean }} opts
+ * @returns {{ hideLine: boolean, fold: boolean, intervals: { start: number, end: number }[] }}
+ */
+export function classifyCommentLine(text, ranges, opts) {
+  const summaryRanges = ranges.filter((range) => range.kind === 'summary');
+  const codeRanges = ranges.filter((range) => range.kind === 'comment');
+  const collapseSummary = !!opts.collapseSummaryComments && !opts.hideSummaryComments && lineIsFullyHidden(text, summaryRanges);
+  const foldCode = !!opts.hideCodeComments && lineIsFullyHidden(text, codeRanges);
+  const vanishSummary = !!opts.hideSummaryComments && lineIsFullyHidden(text, summaryRanges);
+  const fold = collapseSummary || foldCode;
+  const hideLine = fold || vanishSummary;
+  return { hideLine, fold, intervals: hideLine ? [] : hiddenIntervals(ranges, opts) };
+}
+
+/** True when the line has nothing left to read once those intervals are removed. */
+export function lineIsFullyHidden(line, intervals) {
+  if (intervals.length === 0) return false;
+  for (let i = 0; i < line.length; i++) {
+    if (/\s/.test(line[i])) continue;
+    if (!intervals.some((range) => i >= range.start && i < range.end)) return false;
+  }
+  return true;
+}
+
+function overlap(a, b) {
+  const out = [];
+  for (const left of a) {
+    for (const right of b) {
+      const start = Math.max(left.start, right.start);
+      const end = Math.min(left.end, right.end);
+      if (start < end) out.push({ start, end });
+    }
+  }
+  return out;
+}
+
+/**
+ * Walks diff rows in display order, keeping separate lexing state for the old and new sides.
+ * Context rows are hidden only where both sides agree.
+ *
+ * @param {Array<{ type: '+' | '-' | ' ', text: string }>} rows
+ * @param {CommentLanguage} language
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean }} opts
+ * @returns {Array<{ hideLine: boolean, intervals: { start: number, end: number }[] }>}
+ */
+export function classifyDiffRows(rows, language, opts) {
+  let oldState = initialCommentState();
+  let newState = initialCommentState();
+  return rows.map((row) => {
+    if (row.type === '-') {
+      const scanned = scanLine(row.text, oldState, language);
+      oldState = scanned.state;
+      return classifyCommentLine(row.text, scanned.ranges, opts);
+    }
+    if (row.type === '+') {
+      const scanned = scanLine(row.text, newState, language);
+      newState = scanned.state;
+      return classifyCommentLine(row.text, scanned.ranges, opts);
+    }
+    const oldScan = scanLine(row.text, oldState, language);
+    const newScan = scanLine(row.text, newState, language);
+    oldState = oldScan.state;
+    newState = newScan.state;
+    const oldLine = classifyCommentLine(row.text, oldScan.ranges, opts);
+    const newLine = classifyCommentLine(row.text, newScan.ranges, opts);
+    return {
+      hideLine: oldLine.hideLine && newLine.hideLine,
+      fold: oldLine.fold && newLine.fold,
+      intervals: overlap(oldLine.intervals, newLine.intervals),
+    };
+  });
+}
+
+function columnSpacer(cell, other, oppositeChange) {
+  return !!cell && !!other && cell.type === ' ' && cell.text.trim() === '' && other.type === oppositeChange;
+}
+
+/**
+ * Side-by-side diffs put the old line and the new line in the same visual row.
+ * Each column is its own lex stream. A blank cell opposite an added or removed
+ * line is padding, not a source line.
+ *
+ * @param {Array<{ cells: Array<{ type: '+' | '-' | ' ', text: string }> }>} rows
+ * @param {CommentLanguage} language
+ * @param {{ hideCodeComments: boolean, hideSummaryComments: boolean }} opts
+ * @returns {Array<Array<{ hideLine: boolean, intervals: { start: number, end: number }[] }>>}
+ */
+export function classifySideBySideRows(rows, language, opts) {
+  let oldState = initialCommentState();
+  let newState = initialCommentState();
+  const shown = () => ({ hideLine: false, fold: false, intervals: [] });
+  return rows.map(({ cells }) => {
+    const [left, right] = cells;
+    /** @type {Array<{ hideLine: boolean, fold: boolean, intervals: { start: number, end: number }[] }>} */
+    const out = [];
+    if (left) {
+      if (columnSpacer(left, right, '+')) out.push(shown());
+      else {
+        const scanned = scanLine(left.text, oldState, language);
+        oldState = scanned.state;
+        out.push(classifyCommentLine(left.text, scanned.ranges, opts));
+      }
+    }
+    if (right) {
+      if (columnSpacer(right, left, '-')) out.push(shown());
+      else {
+        const scanned = scanLine(right.text, newState, language);
+        newState = scanned.state;
+        out.push(classifyCommentLine(right.text, scanned.ranges, opts));
+      }
+    }
+    return out;
+  });
+}
