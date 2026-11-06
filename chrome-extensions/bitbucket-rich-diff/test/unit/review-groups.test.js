@@ -106,3 +106,34 @@ describe('mountReviewGroups', () => {
     for (const link of document.querySelectorAll('a[href*="#chg-"]')) {
       link.addEventListener('click', () => opened.push(link.getAttribute('href')));
     }
+    const nextUnviewedSwitch = document.querySelector('.bbrd-review-next');
+    nextUnviewedSwitch.click();
+    expect(nextUnviewedSwitch.checked).toBe(true);
+    expect(nextUnviewedSwitch.closest('.bbrd-switch').classList.contains('is-on')).toBe(true);
+    expect(nextUnviewedSwitch.title).toBe('Open src/appsettings.json');
+    expect(opened).toEqual(['#chg-src/appsettings.json']);
+    expect(document.querySelector('a[href="#chg-src/App.cs"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(true);
+    expect(document.querySelector('a[href="#chg-src/appsettings.json"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(false);
+    nextUnviewedSwitch.click();
+    expect(nextUnviewedSwitch.checked).toBe(false);
+    expect(document.querySelector('.bbrd-group-hidden')).toBeNull();
+    const docs = document.querySelector('[data-group="docs"]');
+    expect(docs.dataset.done).toBe('true');
+    expect(docs.querySelector('.bbrd-group-viewed').textContent).toBe('Done');
+    const business = document.querySelector('[data-group="business"]');
+    expect(business.dataset.done).toBe('true');
+    expect(business.querySelector('.bbrd-add').textContent).toBe('+22');
+    expect(document.querySelector('[data-group="tests"]').disabled).toBe(true);
+
+    document.querySelector('[data-group="infrastructure"]').click();
+    expect(document.querySelector('a[href="#chg-src/appsettings.json"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(false);
+    expect(document.querySelector('a[href="#chg-src/App.cs"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(true);
+    expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(true);
+    expect(document.querySelector('article[aria-label="Diff of file src/App.cs"]').classList.contains('bbrd-group-hidden')).toBe(true);
+    expect(document.querySelector('#file-tree > li').classList.contains('bbrd-group-hidden')).toBe(false);
+
+    document.querySelector('[data-group="docs"]').click();
+    expect(document.querySelector('#file-tree > li').classList.contains('bbrd-group-hidden')).toBe(true);
+    expect(document.querySelector('a[href="#chg-README.md"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(false);
+
+    document.querySelector('[data-group="docs"]').click();
