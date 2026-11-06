@@ -207,3 +207,48 @@ describe('review workflows', () => {
       { id: 'other', name: 'Other', color: '#206a83', filter: 'rest', pattern: '' },
     ];
     expect(assignGroup('db/migrate.sql', custom)).toBe('sql');
+    expect(assignGroup('src/App.cs', custom)).toBe('other');
+  });
+
+  it('shows the selected workflow and saves a new group', () => {
+    document.body.innerHTML = `
+      <section class="bbrd-stats"></section>
+      <ul id="file-tree">
+        <li><a href="#chg-db/migrate.sql">migrate.sql</a></li>
+        <li><a href="#chg-src/App.cs">App.cs</a></li>
+      </ul>`;
+    const settings = {
+      reviewWorkflows: [
+        dotnetWorkflow(),
+        {
+          id: 'sql',
+          name: 'SQL pass',
+          groups: [
+            { id: 'sql', name: 'SQL', color: '#ae2e24', filter: 'pattern', pattern: '[.]sql$' },
+            { id: 'other', name: 'Other', color: '#206a83', filter: 'rest', pattern: '' },
+          ],
+        },
+      ],
+      activeReviewWorkflow: 'sql',
+    };
+    const saved = [];
+    mountReviewGroups(document, null, { getItem: () => null }, settings, (patch) => saved.push(patch));
+    expect(document.querySelector('.bbrd-workflow').value).toBe('sql');
+    expect([...document.querySelectorAll('.bbrd-group-name')].map((node) => node.textContent)).toEqual(['SQL', 'Other']);
+    expect(document.querySelector('[data-group="sql"]').style.getPropertyValue('--bbrd-group-ink')).toBe('#ae2e24');
+    document.querySelector('[data-group="sql"]').click();
+    expect(document.querySelector('a[href="#chg-src/App.cs"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(true);
+    expect(document.querySelector('a[href="#chg-db/migrate.sql"]').closest('li').classList.contains('bbrd-group-hidden')).toBe(false);
+
+    document.querySelector('.bbrd-workflow-edit').click();
+    const dialog = document.querySelector('.bbrd-dialog');
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.querySelector('h2').textContent).toBe('Edit workflow');
+    expect(document.querySelector('.bbrd-pattern').value).toBe('[.]sql$');
+    document.querySelector('[data-act="add-group"]').click();
+    expect(saved.at(-1).reviewWorkflows.find((workflow) => workflow.id === 'sql').groups).toHaveLength(3);
+    document.querySelectorAll('.bbrd-group-edit [data-act="up"]')[1].click();
+    const names = saved.at(-1).reviewWorkflows.find((workflow) => workflow.id === 'sql').groups.map((group) => group.name);
+    expect(names[0]).toBe('Other');
+  });
+});
