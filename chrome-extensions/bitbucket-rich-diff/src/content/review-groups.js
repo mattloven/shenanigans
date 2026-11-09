@@ -1,1 +1,407 @@
-import{formatCount as $,pathFromFileLink as I}from"../core/file-filter.js";import{firstUnfinishedGroup as P,nextUnviewed as B,normalizePath as q,parseReviewedState as K,reviewedStorageKey as X}from"../core/review-groups.js";import{activeWorkflow as H,assignGroup as O,normalizeWorkflowState as M,workflowState as J}from"../core/review-workflows.js";import{findFileDiffs as F,getFilePath as G}from"../platform/bitbucket-cloud.js";import{mountWorkflowEditor as Q}from"./workflow-editor.js";const D="Review path",V="Shows the selected workflow. Edit opens a dialog for the name, colour, order, and saved pattern of each group. Patterns can be reused and are remembered for every pull request. The .NET Workflow is the sample. Click a group to show only those files. The chosen card fills in and reads Showing. Continue opens the next group in the saved order when one is selected, or the first group that still has files to view when none is. On the last group it stays off. Next unviewed is a switch: while it is on, viewed files are hidden and the next one opens. A group turns green when every file in it is viewed. File hide rules pause while a group is selected. Comment settings still apply.";let w=null,k=!1,C=null,S=!1;const _=new WeakSet;let s=null;export function resetReviewGroup(){w=null,k=!1,S=!1,C=null}export function activeReviewGroup(){return w}export function mountReviewGroups(e,r=null,l=null,t={},n=null){const i=e.nodeType===9?e:e.ownerDocument??document,a=l??i.defaultView?.localStorage??null,o=i.querySelector(".bbrd-stats");if(!o)return;ie(i);const d=J(t),u=d.reviewWorkflows.find(p=>p.id===d.activeReviewWorkflow)??d.reviewWorkflows[0],b=d.reviewFilters;C&&C!==u.id&&(w=null),C=u.id;const c=le(e,u.groups,b),f=ae(e,r,a);if(s={root:e,pr:r,storage:a,settings:t,files:c,reviewed:f,onChange:n},t.hideReviewGroups){w=null,k=!1,S=!1,o.querySelector(".bbrd-review")?.remove(),o.querySelector(":scope > .bbrd-groups")?.remove(),z(e,c,u.groups,f,b),L(i);return}const g=oe(o,t,n),v=g.querySelector(".bbrd-groups");v&&Y(v);const h=new Set(u.groups.map(p=>p.id));for(const p of v?[...v.querySelectorAll(".bbrd-group")]:[])h.has(p.dataset.group??"")||p.remove();w&&!c.some(p=>p.group===w)&&(w=null);const m=[];for(const p of u.groups){const y=c.filter(x=>x.group===p.id),E=y.filter(x=>f.has(x.path)).length,T=y.reduce((x,R)=>x+R.added,0),A=y.reduce((x,R)=>x+R.removed,0);m.push({group:p.id,count:y.length,viewed:E}),Z(v,p,b,y.length,E,T,A);const W=v?.querySelector(`[data-group="${p.id}"]`);W&&v?.append(W)}ee(g,m,c,f,u.groups.map(p=>p.id)),z(e,c,u.groups,f,b)}function Y(e){e.dataset.bbrdGroupClicks!=="1"&&(e.dataset.bbrdGroupClicks="1",e.addEventListener("click",r=>{const l=r.target,t=l&&l.nodeType===1?l:l?.parentElement;if(!t||typeof t.closest!="function")return;const n=t.closest(".bbrd-group");if(!n||n.tagName!=="BUTTON"||!e.contains(n)||n.disabled||!s)return;const i=n.dataset.group;i&&(w=w===i?null:i,mountReviewGroups(s.root,s.pr,s.storage,s.settings,s.onChange),e.ownerDocument.dispatchEvent(new CustomEvent("bbrd-review-group")))}))}function Z(e,r,l,t,n,i,a){if(!e)return;let o=e.querySelector(`[data-group="${r.id}"]`);(!o||o.tagName!=="BUTTON")&&(o=e.ownerDocument.createElement("button"),o.type="button",o.className="bbrd-group",o.dataset.group=r.id,o.innerHTML='<span class="bbrd-group-name"></span><span class="bbrd-group-state">Showing</span><span class="bbrd-group-count"></span><span class="bbrd-group-lines"><span class="bbrd-add"></span> <span class="bbrd-del"></span></span><span class="bbrd-group-meter" aria-hidden="true"><span></span></span><span class="bbrd-group-viewed"></span>',e.append(o));const d=t>0&&n===t;o.disabled=t===0;const u=l.find(W=>W.id===r.filterId);o.title=u?`${u.name}: ${u.pattern}`:"Remaining files",o.setAttribute("aria-pressed",w===r.id?"true":"false"),o.dataset.done=d?"true":"false",o.style.setProperty("--bbrd-group-ink",d?"#216e4e":r.color),o.style.setProperty("--bbrd-group",d?"#dcfff1":`color-mix(in srgb, ${r.color} 16%, #fff)`),o.style.setProperty("--bbrd-group-selected",d?"#dcfff1":`color-mix(in srgb, ${r.color} 22%, #fff)`);const b=o.querySelector(".bbrd-group-name"),c=o.querySelector(".bbrd-group-count"),f=o.querySelector(".bbrd-group-viewed"),g=o.querySelector(".bbrd-group-meter span"),v=o.querySelector(".bbrd-add"),h=o.querySelector(".bbrd-del"),m=`${$(t)} ${t===1?"file":"files"}`,p=d?"Done":`${$(n)} viewed`,y=`+${$(i)}`,E=`\u2212${$(a)}`;b&&b.textContent!==r.name&&(b.textContent=r.name),c&&c.textContent!==m&&(c.textContent=m),f&&f.textContent!==p&&(f.textContent=p),v&&v.textContent!==y&&(v.textContent=y),h&&h.textContent!==E&&(h.textContent=E);const T=t===0?"0%":`${Math.round(n/t*100)}%`;g instanceof HTMLElement&&g.style.width!==T&&(g.style.width=T);const A=w===r.id?"Showing. ":"";o.setAttribute("aria-label",`${A}${r.name}, ${m}, ${y} ${E}, ${p}`)}function ee(e,r,l,t,n){const i=e.querySelector(".bbrd-review-head");if(!i)return;let a=i.querySelector(".bbrd-review-actions");a||(a=e.ownerDocument.createElement("div"),a.className="bbrd-review-actions",a.innerHTML='<button type="button" class="bbrd-review-continue">Continue</button><label class="bbrd-switch"><input type="checkbox" class="bbrd-review-next" /><span>Next unviewed</span></label>',a.querySelector(".bbrd-review-continue")?.addEventListener("click",()=>{if(!s)return;const f=H(s.settings).groups,g=f.map(h=>h.id),v=U(w,te(s.files,s.reviewed,f),g);v&&(w=v,mountReviewGroups(s.root,s.pr,s.storage,s.settings,s.onChange),a.ownerDocument.dispatchEvent(new CustomEvent("bbrd-review-group")))}),a.querySelector(".bbrd-review-next")?.addEventListener("change",()=>{if(!s)return;const f=a.querySelector(".bbrd-review-next");k=f instanceof HTMLInputElement&&f.checked;const v=H(s.settings).groups.map(p=>p.id);if(mountReviewGroups(s.root,s.pr,s.storage,s.settings,s.onChange),a.ownerDocument.dispatchEvent(new CustomEvent("bbrd-review-group")),!k)return;const m=B(s.files,s.reviewed,w,j(s.root),v)?.item.querySelector('a[href*="#chg-"]');m instanceof HTMLElement&&(m.scrollIntoView?.({block:"nearest"}),m.click())}),i.append(a));const o=H(s?.settings).groups,d=U(w,r,n),u=a.querySelector(".bbrd-review-continue");if(u instanceof HTMLButtonElement){const f=d?o.find(h=>h.id===d)?.name??d:"",g=!P(r,n),v=d?`Continue to ${f}`:g&&!w?"Done":"Continue";u.disabled=!d,u.textContent!==v&&(u.textContent=v),u.title=d?`Show ${f}`:g&&!w?"Every file is marked viewed":"This is the last group"}const b=B(l,t,w,j(e.ownerDocument),n);b||(k=!1);const c=a.querySelector(".bbrd-review-next");c instanceof HTMLInputElement&&(c.checked=k,c.disabled=!b,c.title=b?`Open ${b.path}`:"Every file in this view is marked viewed",c.closest(".bbrd-switch")?.classList.toggle("is-on",k),c.closest(".bbrd-switch")?.classList.toggle("is-disabled",!b))}function U(e,r,l){if(e){const t=l.indexOf(e);return t<0||t>=l.length-1?null:l[t+1]}return P(r,l)}function te(e,r,l){return l.map(t=>{const n=e.filter(i=>i.group===t.id);return{group:t.id,count:n.length,viewed:n.filter(i=>r.has(i.path)).length}})}function j(e){const l=(e.nodeType===9?e:e.ownerDocument)?.defaultView?.location?.hash??"",t=q(I(l));if(t)return t;for(const n of F(e)){if(n.classList.contains("bbrd-group-hidden"))continue;const i=q(G(n));if(i)return i}return null}function oe(e,r,l){e.querySelector(":scope > .bbrd-groups")?.remove();let t=e.querySelector(".bbrd-review");if(!t){t=e.ownerDocument.createElement("section"),t.className="bbrd-review",t.innerHTML=`<div class="bbrd-review-head"><h3></h3><button type="button" class="bbrd-info" aria-label="About ${D}">i</button></div><div class="bbrd-groups" role="group" aria-label="${D}"></div>`;const d=t.querySelector(".bbrd-info");d?.addEventListener("click",g=>g.preventDefault());const u=t.querySelector(".bbrd-review-head"),b=e.ownerDocument.createElement("label");b.className="bbrd-workflow-pick",b.append("Workflow");const c=e.ownerDocument.createElement("select");c.className="bbrd-workflow",c.setAttribute("aria-label","Review workflow"),c.addEventListener("change",()=>{if(!s?.onChange)return;w=null,C=c.value;const g=M(s.settings.reviewWorkflows,c.value,s.settings.reviewFilters);s.onChange({reviewWorkflows:g.reviewWorkflows,reviewFilters:g.reviewFilters,activeReviewWorkflow:c.value})});const f=e.ownerDocument.createElement("button");f.type="button",f.className="bbrd-workflow-edit",f.textContent="Edit",f.addEventListener("click",()=>{S=!0,s&&mountReviewGroups(s.root,s.pr,s.storage,s.settings,s.onChange)}),b.append(c),d?.after(b),b.after(f),u&&!u.contains(b)&&u.append(b,f),e.append(t)}const n=t.querySelector("h3");n&&n.textContent!==D&&(n.textContent=D);const i=t.querySelector(".bbrd-info");i&&i.getAttribute("title")!==V&&i.setAttribute("title",V);const a=t.querySelector(".bbrd-workflow");a instanceof HTMLSelectElement&&re(a,r),t.querySelector(".bbrd-workflow-panel")?.remove();const o=t.querySelector(".bbrd-workflow-edit");return o instanceof HTMLButtonElement&&(o.textContent="Edit",o.setAttribute("aria-expanded",S?"true":"false")),ne(e.ownerDocument,r,l),t}function ne(e,r,l){let t=e.querySelector(".bbrd-dialog-backdrop");if(!S){t?.remove();return}t||(t=e.createElement("div"),t.className="bbrd-dialog-backdrop",t.innerHTML=['<div class="bbrd-dialog" role="dialog" aria-modal="true" aria-labelledby="bbrd-dialog-title">','<div class="bbrd-dialog-head">','<div class="bbrd-dialog-titles"><h2 id="bbrd-dialog-title">Edit workflow</h2><p class="bbrd-dialog-subtitle"></p></div>','<button type="button" class="bbrd-dialog-close" aria-label="Close">\xD7</button>',"</div>",'<div class="bbrd-dialog-body"></div>','<div class="bbrd-dialog-foot"><button type="button" class="bbrd-dialog-done">Done</button></div>',"</div>"].join(""),t.addEventListener("click",d=>{d.target===t&&L(e)}),t.querySelector(".bbrd-dialog-close")?.addEventListener("click",()=>L(e)),t.querySelector(".bbrd-dialog-done")?.addEventListener("click",()=>L(e)),e.body.append(t),t.querySelector(".bbrd-dialog-done")?.focus());const n=M(r.reviewWorkflows,r.activeReviewWorkflow,r.reviewFilters),i=n.reviewWorkflows.find(d=>d.id===n.activeReviewWorkflow)??n.reviewWorkflows[0],a=t.querySelector(".bbrd-dialog-subtitle");a&&(a.textContent=i?.name??"");const o=t.querySelector(".bbrd-dialog-body");o instanceof HTMLElement&&l&&Q(o,r,l)}function L(e){S=!1,e.querySelector(".bbrd-dialog-backdrop")?.remove();const r=e.querySelector(".bbrd-workflow-edit");r instanceof HTMLButtonElement&&r.setAttribute("aria-expanded","false")}function re(e,r){const l=M(r.reviewWorkflows,r.activeReviewWorkflow),t=`${l.reviewWorkflows.map(n=>`${n.id}\t${n.name}`).join(`\n`)}\n${l.activeReviewWorkflow}`;if(e.dataset.signature!==t){e.dataset.signature=t,e.replaceChildren();for(const n of l.reviewWorkflows){const i=e.ownerDocument.createElement("option");i.value=n.id,i.textContent=n.name,e.append(i)}e.value=l.activeReviewWorkflow}}function ie(e){_.has(e)||(_.add(e),e.addEventListener("bbrd-edit-workflow",()=>{S=!0,s&&mountReviewGroups(s.root,s.pr,s.storage,s.settings,s.onChange)}),e.addEventListener("keydown",r=>{r.key==="Escape"&&S&&L(e)}))}function se(e){let r=0,l=0;const t=e.ownerDocument;if(!t?.createTreeWalker)return{added:N(e.textContent||"","added"),removed:N(e.textContent||"","removed")};const n=t.createTreeWalker(e,NodeFilter.SHOW_TEXT);let i=n.nextNode();for(;i;){const a=i.textContent||"";r+=N(a,"added"),l+=N(a,"removed"),i=n.nextNode()}return{added:r,removed:l}}function N(e,r){const l=String.raw`\d{1,3}(?:,\d{3})*|\d+`,t=new RegExp(`(${l})\\s+lines?\\s+${r}`,"gi");let n=0;for(const i of e.matchAll(t))n+=Number(i[1].replaceAll(",",""));return n}function le(e,r,l){const t=[],n=new Set;if(!e.querySelectorAll)return t;for(const i of e.querySelectorAll('a[href*="#chg-"]')){const a=q(I(i.getAttribute("href")));if(!a||n.has(a))continue;n.add(a);const o=i.closest("li")??i,d=se(o);t.push({path:a,group:O(a,r,l),item:o,added:d.added,removed:d.removed})}return t}function ae(e,r,l){const t=X(r);let n=new Set;if(t&&l)try{n=K(l.getItem(t))}catch{n=new Set}for(const i of F(e)){const a=q(G(i)),o=i.querySelector('[data-qa="bk-file__header"] input[type="checkbox"], .file-header input[type="checkbox"]');!a||!(o instanceof HTMLInputElement)||(o.checked?n.add(a):n.delete(a))}return n}function z(e,r,l,t,n){const i=w,a=(o,d)=>!!i&&d!==i||k&&t.has(o);for(const o of r)o.item.classList.toggle("bbrd-group-hidden",a(o.path,o.group));if(e.querySelectorAll){for(const o of F(e)){const d=q(G(o)),u=!!d&&a(d,O(d,l,n));o.classList.toggle("bbrd-group-hidden",u)}for(const o of e.querySelectorAll("#file-tree li")){if(o.querySelector(':scope > a[href*="#chg-"]'))continue;const d=[...o.querySelectorAll('a[href*="#chg-"]')];if(!d.length)continue;const u=(!!i||k)&&d.every(b=>{const c=b.closest("li");return!!c&&(c.classList.contains("bbrd-group-hidden")||c.classList.contains("bbrd-file-hidden"))});o.classList.toggle("bbrd-group-hidden",u)}}}
+import { formatCount as $, pathFromFileLink as I } from '../core/file-filter.js';
+import {
+  firstUnfinishedGroup as P,
+  nextUnviewed as B,
+  normalizePath as q,
+  parseReviewedState as K,
+  reviewedStorageKey as X,
+} from '../core/review-groups.js';
+import {
+  activeWorkflow as H,
+  assignGroup as O,
+  normalizeWorkflowState as M,
+  workflowState as J,
+} from '../core/review-workflows.js';
+import { findFileDiffs as F, getFilePath as G } from '../platform/bitbucket-cloud.js';
+import { mountWorkflowEditor as Q } from './workflow-editor.js';
+const D = 'Review path',
+  V =
+    'Shows the selected workflow. Edit opens a dialog for the name, colour, order, and saved pattern of each group. Patterns can be reused and are remembered for every pull request. The .NET Workflow is the sample. Click a group to show only those files. The chosen card fills in and reads Showing. Continue opens the next group in the saved order when one is selected, or the first group that still has files to view when none is. On the last group it stays off. Next unviewed is a switch: while it is on, viewed files are hidden and the next one opens. A group turns green when every file in it is viewed. File hide rules pause while a group is selected. Comment settings still apply.';
+let w = null,
+  k = !1,
+  C = null,
+  S = !1;
+const _ = new WeakSet();
+let s = null;
+export function resetReviewGroup() {
+  ((w = null), (k = !1), (S = !1), (C = null));
+}
+export function activeReviewGroup() {
+  return w;
+}
+export function mountReviewGroups(e, r = null, l = null, t = {}, n = null) {
+  const i = e.nodeType === 9 ? e : (e.ownerDocument ?? document),
+    a = l ?? i.defaultView?.localStorage ?? null,
+    o = i.querySelector('.bbrd-stats');
+  if (!o) return;
+  ie(i);
+  const d = J(t),
+    u = d.reviewWorkflows.find((p) => p.id === d.activeReviewWorkflow) ?? d.reviewWorkflows[0],
+    b = d.reviewFilters;
+  (C && C !== u.id && (w = null), (C = u.id));
+  const c = le(e, u.groups, b),
+    f = ae(e, r, a);
+  if (
+    ((s = { root: e, pr: r, storage: a, settings: t, files: c, reviewed: f, onChange: n }),
+    t.hideReviewGroups)
+  ) {
+    ((w = null),
+      (k = !1),
+      (S = !1),
+      o.querySelector('.bbrd-review')?.remove(),
+      o.querySelector(':scope > .bbrd-groups')?.remove(),
+      z(e, c, u.groups, f, b),
+      L(i));
+    return;
+  }
+  const g = oe(o, t, n),
+    v = g.querySelector('.bbrd-groups');
+  v && Y(v);
+  const h = new Set(u.groups.map((p) => p.id));
+  for (const p of v ? [...v.querySelectorAll('.bbrd-group')] : []) h.has(p.dataset.group ?? '') || p.remove();
+  w && !c.some((p) => p.group === w) && (w = null);
+  const m = [];
+  for (const p of u.groups) {
+    const y = c.filter((x) => x.group === p.id),
+      E = y.filter((x) => f.has(x.path)).length,
+      T = y.reduce((x, R) => x + R.added, 0),
+      A = y.reduce((x, R) => x + R.removed, 0);
+    (m.push({ group: p.id, count: y.length, viewed: E }), Z(v, p, b, y.length, E, T, A));
+    const W = v?.querySelector(`[data-group="${p.id}"]`);
+    W && v?.append(W);
+  }
+  (ee(
+    g,
+    m,
+    c,
+    f,
+    u.groups.map((p) => p.id),
+  ),
+    z(e, c, u.groups, f, b));
+}
+function Y(e) {
+  e.dataset.bbrdGroupClicks !== '1' &&
+    ((e.dataset.bbrdGroupClicks = '1'),
+    e.addEventListener('click', (r) => {
+      const l = r.target,
+        t = l && l.nodeType === 1 ? l : l?.parentElement;
+      if (!t || typeof t.closest != 'function') return;
+      const n = t.closest('.bbrd-group');
+      if (!n || n.tagName !== 'BUTTON' || !e.contains(n) || n.disabled || !s) return;
+      const i = n.dataset.group;
+      i &&
+        ((w = w === i ? null : i),
+        mountReviewGroups(s.root, s.pr, s.storage, s.settings, s.onChange),
+        e.ownerDocument.dispatchEvent(new CustomEvent('bbrd-review-group')));
+    }));
+}
+function Z(e, r, l, t, n, i, a) {
+  if (!e) return;
+  let o = e.querySelector(`[data-group="${r.id}"]`);
+  (!o || o.tagName !== 'BUTTON') &&
+    ((o = e.ownerDocument.createElement('button')),
+    (o.type = 'button'),
+    (o.className = 'bbrd-group'),
+    (o.dataset.group = r.id),
+    (o.innerHTML =
+      '<span class="bbrd-group-name"></span><span class="bbrd-group-state">Showing</span><span class="bbrd-group-count"></span><span class="bbrd-group-lines"><span class="bbrd-add"></span> <span class="bbrd-del"></span></span><span class="bbrd-group-meter" aria-hidden="true"><span></span></span><span class="bbrd-group-viewed"></span>'),
+    e.append(o));
+  const d = t > 0 && n === t;
+  o.disabled = t === 0;
+  const u = l.find((W) => W.id === r.filterId);
+  ((o.title = u ? `${u.name}: ${u.pattern}` : 'Remaining files'),
+    o.setAttribute('aria-pressed', w === r.id ? 'true' : 'false'),
+    (o.dataset.done = d ? 'true' : 'false'),
+    o.style.setProperty('--bbrd-group-ink', d ? '#216e4e' : r.color),
+    o.style.setProperty('--bbrd-group', d ? '#dcfff1' : `color-mix(in srgb, ${r.color} 16%, #fff)`),
+    o.style.setProperty('--bbrd-group-selected', d ? '#dcfff1' : `color-mix(in srgb, ${r.color} 22%, #fff)`));
+  const b = o.querySelector('.bbrd-group-name'),
+    c = o.querySelector('.bbrd-group-count'),
+    f = o.querySelector('.bbrd-group-viewed'),
+    g = o.querySelector('.bbrd-group-meter span'),
+    v = o.querySelector('.bbrd-add'),
+    h = o.querySelector('.bbrd-del'),
+    m = `${$(t)} ${t === 1 ? 'file' : 'files'}`,
+    p = d ? 'Done' : `${$(n)} viewed`,
+    y = `+${$(i)}`,
+    E = `\u2212${$(a)}`;
+  (b && b.textContent !== r.name && (b.textContent = r.name),
+    c && c.textContent !== m && (c.textContent = m),
+    f && f.textContent !== p && (f.textContent = p),
+    v && v.textContent !== y && (v.textContent = y),
+    h && h.textContent !== E && (h.textContent = E));
+  const T = t === 0 ? '0%' : `${Math.round((n / t) * 100)}%`;
+  g instanceof HTMLElement && g.style.width !== T && (g.style.width = T);
+  const A = w === r.id ? 'Showing. ' : '';
+  o.setAttribute('aria-label', `${A}${r.name}, ${m}, ${y} ${E}, ${p}`);
+}
+function ee(e, r, l, t, n) {
+  const i = e.querySelector('.bbrd-review-head');
+  if (!i) return;
+  let a = i.querySelector('.bbrd-review-actions');
+  a ||
+    ((a = e.ownerDocument.createElement('div')),
+    (a.className = 'bbrd-review-actions'),
+    (a.innerHTML =
+      '<button type="button" class="bbrd-review-continue">Continue</button><label class="bbrd-switch"><input type="checkbox" class="bbrd-review-next" /><span>Next unviewed</span></label>'),
+    a.querySelector('.bbrd-review-continue')?.addEventListener('click', () => {
+      if (!s) return;
+      const f = H(s.settings).groups,
+        g = f.map((h) => h.id),
+        v = U(w, te(s.files, s.reviewed, f), g);
+      v &&
+        ((w = v),
+        mountReviewGroups(s.root, s.pr, s.storage, s.settings, s.onChange),
+        a.ownerDocument.dispatchEvent(new CustomEvent('bbrd-review-group')));
+    }),
+    a.querySelector('.bbrd-review-next')?.addEventListener('change', () => {
+      if (!s) return;
+      const f = a.querySelector('.bbrd-review-next');
+      k = f instanceof HTMLInputElement && f.checked;
+      const v = H(s.settings).groups.map((p) => p.id);
+      if (
+        (mountReviewGroups(s.root, s.pr, s.storage, s.settings, s.onChange),
+        a.ownerDocument.dispatchEvent(new CustomEvent('bbrd-review-group')),
+        !k)
+      )
+        return;
+      const m = B(s.files, s.reviewed, w, j(s.root), v)?.item.querySelector('a[href*="#chg-"]');
+      m instanceof HTMLElement && (m.scrollIntoView?.({ block: 'nearest' }), m.click());
+    }),
+    i.append(a));
+  const o = H(s?.settings).groups,
+    d = U(w, r, n),
+    u = a.querySelector('.bbrd-review-continue');
+  if (u instanceof HTMLButtonElement) {
+    const f = d ? (o.find((h) => h.id === d)?.name ?? d) : '',
+      g = !P(r, n),
+      v = d ? `Continue to ${f}` : g && !w ? 'Done' : 'Continue';
+    ((u.disabled = !d),
+      u.textContent !== v && (u.textContent = v),
+      (u.title = d ? `Show ${f}` : g && !w ? 'Every file is marked viewed' : 'This is the last group'));
+  }
+  const b = B(l, t, w, j(e.ownerDocument), n);
+  b || (k = !1);
+  const c = a.querySelector('.bbrd-review-next');
+  c instanceof HTMLInputElement &&
+    ((c.checked = k),
+    (c.disabled = !b),
+    (c.title = b ? `Open ${b.path}` : 'Every file in this view is marked viewed'),
+    c.closest('.bbrd-switch')?.classList.toggle('is-on', k),
+    c.closest('.bbrd-switch')?.classList.toggle('is-disabled', !b));
+}
+function U(e, r, l) {
+  if (e) {
+    const t = l.indexOf(e);
+    return t < 0 || t >= l.length - 1 ? null : l[t + 1];
+  }
+  return P(r, l);
+}
+function te(e, r, l) {
+  return l.map((t) => {
+    const n = e.filter((i) => i.group === t.id);
+    return { group: t.id, count: n.length, viewed: n.filter((i) => r.has(i.path)).length };
+  });
+}
+function j(e) {
+  const l = (e.nodeType === 9 ? e : e.ownerDocument)?.defaultView?.location?.hash ?? '',
+    t = q(I(l));
+  if (t) return t;
+  for (const n of F(e)) {
+    if (n.classList.contains('bbrd-group-hidden')) continue;
+    const i = q(G(n));
+    if (i) return i;
+  }
+  return null;
+}
+function oe(e, r, l) {
+  e.querySelector(':scope > .bbrd-groups')?.remove();
+  let t = e.querySelector('.bbrd-review');
+  if (!t) {
+    ((t = e.ownerDocument.createElement('section')),
+      (t.className = 'bbrd-review'),
+      (t.innerHTML = `<div class="bbrd-review-head"><h3></h3><button type="button" class="bbrd-info" aria-label="About ${D}">i</button></div><div class="bbrd-groups" role="group" aria-label="${D}"></div>`));
+    const d = t.querySelector('.bbrd-info');
+    d?.addEventListener('click', (g) => g.preventDefault());
+    const u = t.querySelector('.bbrd-review-head'),
+      b = e.ownerDocument.createElement('label');
+    ((b.className = 'bbrd-workflow-pick'), b.append('Workflow'));
+    const c = e.ownerDocument.createElement('select');
+    ((c.className = 'bbrd-workflow'),
+      c.setAttribute('aria-label', 'Review workflow'),
+      c.addEventListener('change', () => {
+        if (!s?.onChange) return;
+        ((w = null), (C = c.value));
+        const g = M(s.settings.reviewWorkflows, c.value, s.settings.reviewFilters);
+        s.onChange({
+          reviewWorkflows: g.reviewWorkflows,
+          reviewFilters: g.reviewFilters,
+          activeReviewWorkflow: c.value,
+        });
+      }));
+    const f = e.ownerDocument.createElement('button');
+    ((f.type = 'button'),
+      (f.className = 'bbrd-workflow-edit'),
+      (f.textContent = 'Edit'),
+      f.addEventListener('click', () => {
+        ((S = !0), s && mountReviewGroups(s.root, s.pr, s.storage, s.settings, s.onChange));
+      }),
+      b.append(c),
+      d?.after(b),
+      b.after(f),
+      u && !u.contains(b) && u.append(b, f),
+      e.append(t));
+  }
+  const n = t.querySelector('h3');
+  n && n.textContent !== D && (n.textContent = D);
+  const i = t.querySelector('.bbrd-info');
+  i && i.getAttribute('title') !== V && i.setAttribute('title', V);
+  const a = t.querySelector('.bbrd-workflow');
+  (a instanceof HTMLSelectElement && re(a, r), t.querySelector('.bbrd-workflow-panel')?.remove());
+  const o = t.querySelector('.bbrd-workflow-edit');
+  return (
+    o instanceof HTMLButtonElement &&
+      ((o.textContent = 'Edit'), o.setAttribute('aria-expanded', S ? 'true' : 'false')),
+    ne(e.ownerDocument, r, l),
+    t
+  );
+}
+function ne(e, r, l) {
+  let t = e.querySelector('.bbrd-dialog-backdrop');
+  if (!S) {
+    t?.remove();
+    return;
+  }
+  t ||
+    ((t = e.createElement('div')),
+    (t.className = 'bbrd-dialog-backdrop'),
+    (t.innerHTML = [
+      '<div class="bbrd-dialog" role="dialog" aria-modal="true" aria-labelledby="bbrd-dialog-title">',
+      '<div class="bbrd-dialog-head">',
+      '<div class="bbrd-dialog-titles"><h2 id="bbrd-dialog-title">Edit workflow</h2><p class="bbrd-dialog-subtitle"></p></div>',
+      '<button type="button" class="bbrd-dialog-close" aria-label="Close">\xD7</button>',
+      '</div>',
+      '<div class="bbrd-dialog-body"></div>',
+      '<div class="bbrd-dialog-foot"><button type="button" class="bbrd-dialog-done">Done</button></div>',
+      '</div>',
+    ].join('')),
+    t.addEventListener('click', (d) => {
+      d.target === t && L(e);
+    }),
+    t.querySelector('.bbrd-dialog-close')?.addEventListener('click', () => L(e)),
+    t.querySelector('.bbrd-dialog-done')?.addEventListener('click', () => L(e)),
+    e.body.append(t),
+    t.querySelector('.bbrd-dialog-done')?.focus());
+  const n = M(r.reviewWorkflows, r.activeReviewWorkflow, r.reviewFilters),
+    i = n.reviewWorkflows.find((d) => d.id === n.activeReviewWorkflow) ?? n.reviewWorkflows[0],
+    a = t.querySelector('.bbrd-dialog-subtitle');
+  a && (a.textContent = i?.name ?? '');
+  const o = t.querySelector('.bbrd-dialog-body');
+  o instanceof HTMLElement && l && Q(o, r, l);
+}
+function L(e) {
+  ((S = !1), e.querySelector('.bbrd-dialog-backdrop')?.remove());
+  const r = e.querySelector('.bbrd-workflow-edit');
+  r instanceof HTMLButtonElement && r.setAttribute('aria-expanded', 'false');
+}
+function re(e, r) {
+  const l = M(r.reviewWorkflows, r.activeReviewWorkflow),
+    t = `${l.reviewWorkflows.map((n) => `${n.id}\t${n.name}`).join(`\n`)}\n${l.activeReviewWorkflow}`;
+  if (e.dataset.signature !== t) {
+    ((e.dataset.signature = t), e.replaceChildren());
+    for (const n of l.reviewWorkflows) {
+      const i = e.ownerDocument.createElement('option');
+      ((i.value = n.id), (i.textContent = n.name), e.append(i));
+    }
+    e.value = l.activeReviewWorkflow;
+  }
+}
+function ie(e) {
+  _.has(e) ||
+    (_.add(e),
+    e.addEventListener('bbrd-edit-workflow', () => {
+      ((S = !0), s && mountReviewGroups(s.root, s.pr, s.storage, s.settings, s.onChange));
+    }),
+    e.addEventListener('keydown', (r) => {
+      r.key === 'Escape' && S && L(e);
+    }));
+}
+function se(e) {
+  let r = 0,
+    l = 0;
+  const t = e.ownerDocument;
+  if (!t?.createTreeWalker)
+    return { added: N(e.textContent || '', 'added'), removed: N(e.textContent || '', 'removed') };
+  const n = t.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+  let i = n.nextNode();
+  for (; i;) {
+    const a = i.textContent || '';
+    ((r += N(a, 'added')), (l += N(a, 'removed')), (i = n.nextNode()));
+  }
+  return { added: r, removed: l };
+}
+function N(e, r) {
+  const l = String.raw`\d{1,3}(?:,\d{3})*|\d+`,
+    t = new RegExp(`(${l})\\s+lines?\\s+${r}`, 'gi');
+  let n = 0;
+  for (const i of e.matchAll(t)) n += Number(i[1].replaceAll(',', ''));
+  return n;
+}
+function le(e, r, l) {
+  const t = [],
+    n = new Set();
+  if (!e.querySelectorAll) return t;
+  for (const i of e.querySelectorAll('a[href*="#chg-"]')) {
+    const a = q(I(i.getAttribute('href')));
+    if (!a || n.has(a)) continue;
+    n.add(a);
+    const o = i.closest('li') ?? i,
+      d = se(o);
+    t.push({ path: a, group: O(a, r, l), item: o, added: d.added, removed: d.removed });
+  }
+  return t;
+}
+function ae(e, r, l) {
+  const t = X(r);
+  let n = new Set();
+  if (t && l)
+    try {
+      n = K(l.getItem(t));
+    } catch {
+      n = new Set();
+    }
+  for (const i of F(e)) {
+    const a = q(G(i)),
+      o = i.querySelector(
+        '[data-qa="bk-file__header"] input[type="checkbox"], .file-header input[type="checkbox"]',
+      );
+    !a || !(o instanceof HTMLInputElement) || (o.checked ? n.add(a) : n.delete(a));
+  }
+  return n;
+}
+function z(e, r, l, t, n) {
+  const i = w,
+    a = (o, d) => (!!i && d !== i) || (k && t.has(o));
+  for (const o of r) o.item.classList.toggle('bbrd-group-hidden', a(o.path, o.group));
+  if (e.querySelectorAll) {
+    for (const o of F(e)) {
+      const d = q(G(o)),
+        u = !!d && a(d, O(d, l, n));
+      o.classList.toggle('bbrd-group-hidden', u);
+    }
+    for (const o of e.querySelectorAll('#file-tree li')) {
+      if (o.querySelector(':scope > a[href*="#chg-"]')) continue;
+      const d = [...o.querySelectorAll('a[href*="#chg-"]')];
+      if (!d.length) continue;
+      const u =
+        (!!i || k) &&
+        d.every((b) => {
+          const c = b.closest('li');
+          return (
+            !!c && (c.classList.contains('bbrd-group-hidden') || c.classList.contains('bbrd-file-hidden'))
+          );
+        });
+      o.classList.toggle('bbrd-group-hidden', u);
+    }
+  }
+}
