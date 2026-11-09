@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hedge Face Swap</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <h1>Hedge Face Swap</h1>
+    </div>
+    <p class="status" id="status" role="status">Loading frames…</p>
+    <div class="bar-actions">
+      <a class="btn ghost" href="enhance.html" title="Clean up and upscale the source frames">Enhance frames…</a>
+      <button class="btn ghost" id="loadFramesBtn" title="Pick frame images or a GIF">Load frames…</button>
+      <input type="file" id="loadFrames" accept="image/*" multiple hidden>
+      <button class="btn primary" id="generate" disabled>Generate</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="viewport" id="viewport">
+        <canvas id="preview" width="960" height="720"></canvas>
+        <div class="busy" id="busy" hidden>
+          <div class="busy-card">
+            <p id="busyText">Working…</p>
+            <div class="meter"><div id="busyBar"></div></div>
+          </div>
+        </div>
+        <div class="drop-hint" id="dropHint" hidden><span>Drop to use as the face</span></div>
+      </div>
+
+      <div class="transport">
+        <button class="icon-btn" id="play" title="Play / pause (Space)" aria-label="Play">
+          <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5v14l11-7z"/></svg>
+          <svg viewBox="0 0 24 24" class="i-pause"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+        </button>
+        <button class="icon-btn" id="prev" title="Previous frame (←)" aria-label="Previous frame">
+          <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <button class="icon-btn" id="next" title="Next frame (→)" aria-label="Next frame">
+          <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <div class="timeline">
+          <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Frame">
+          <canvas id="strip" height="8" aria-hidden="true"></canvas>
+        </div>
+        <span class="frame-label" id="frameLabel">–</span>
+        <label class="chip" title="Hold O"><input type="checkbox" id="showOriginal"><span>Original</span></label>
+        <label class="chip"><input type="checkbox" id="showOverlay"><span>Tracking</span></label>
+      </div>
+
+      <section class="trim" aria-label="Trim">
+        <div class="trim-head">
+          <h2>Trim</h2>
+          <span class="muted small" id="trimInfo"></span>
+          <div class="trim-actions">
+            <button class="btn small-btn" id="trimSetStart" title="Start the output at this frame ([)">Start here</button>
+            <button class="btn small-btn" id="trimSetEnd" title="End the output at this frame (])">End here</button>
+            <button class="btn small-btn" id="trimDrop" title="Drop or keep this frame (X)">Drop / keep frame</button>
+            <button class="btn small-btn" id="trimReset">Reset</button>
+          </div>
+        </div>
+        <div class="trim-scroll" id="trimScroll">
+          <div class="trim-track">
+            <div class="trim-frames" id="trimFrames"></div>
+            <div class="trim-handle start" id="trimStart" title="Drag to set the first frame"></div>
+            <div class="trim-handle end" id="trimEnd" title="Drag to set the last frame"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results" id="results" hidden>
+        <div class="results-head">
+          <h2>Last export</h2>
+          <p class="muted" id="resultMeta"></p>
+          <p class="warn small stale" id="resultStale" hidden>Your settings or trim have changed since this was made. Press Generate to make it again.</p>
+        </div>
+        <div class="results-body">
+          <div class="result-gif"><img id="resultGif" alt="Generated GIF"></div>
+          <div class="results-actions">
+            <a class="btn primary" id="downloadGif" download="face-swap.gif">Download GIF</a>
+            <button class="btn" id="downloadZip">Download PNG frames (.zip)</button>
+            <p class="muted small" id="savedTo"></p>
+          </div>
+        </div>
+        <div class="filmstrip" id="filmstrip"></div>
+      </section>
+    </section>
+
+    <aside class="panel">
+      <details class="group" open>
+        <summary>Face</summary>
+        <div class="face-pick">
+          <div class="face-thumb" id="faceThumb"><span>No face yet</span></div>
+          <div class="face-meta">
+            <p class="face-name" id="faceName">Drop a transparent PNG anywhere, or</p>
+            <button class="btn" id="chooseFace">Choose PNG…</button>
+            <input type="file" id="faceFile" accept="image/png,image/webp,image/*" hidden>
+            <p class="warn small" id="faceWarn" hidden>No transparency: the whole rectangle will be pasted.</p>
+          </div>
+        </div>
+      </details>
+
+      <details class="group" open>
+        <summary>Fit</summary>
+        <p class="tip small">Click the face in the preview: drag it to move, drag a corner to resize, drag the round knob to rotate (Shift snaps to 15°).</p>
+        <label class="check"><input type="checkbox" id="eraseOn"> Paint out the original head and hair</label>
+        <div class="field">
+          <label for="fitScale">Size <output id="fitScaleOut"></output></label>
+          <input type="range" id="fitScale" min="0.5" max="2" step="0.01">
+        </div>
+        <div class="field">
+          <label for="fitX">Left / right <output id="fitXOut"></output></label>
+          <input type="range" id="fitX" min="-0.5" max="0.5" step="0.005">
+        </div>
+        <div class="field">
+          <label for="fitY">Up / down <output id="fitYOut"></output></label>
+          <input type="range" id="fitY" min="-0.5" max="0.5" step="0.005">
+        </div>
+        <div class="field">
+          <label for="fitRot">Rotation <output id="fitRotOut"></output></label>
+          <input type="range" id="fitRot" min="-180" max="180" step="0.5">
+        </div>
+        <label class="check"><input type="checkbox" id="fitFlip"> Mirror the face</label>
+        <div class="subhead">Look</div>
+        <div class="field">
+          <label for="lookBright">Brightness <output id="lookBrightOut"></output></label>
+          <input type="range" id="lookBright" min="50" max="150" step="1">
+        </div>
+        <div class="field">
+          <label for="lookContrast">Contrast <output id="lookContrastOut"></output></label>
+          <input type="range" id="lookContrast" min="50" max="150" step="1">
+        </div>
+        <div class="field">
+          <label for="lookSat">Saturation <output id="lookSatOut"></output></label>
+          <input type="range" id="lookSat" min="0" max="200" step="1">
+        </div>
+        <button class="btn small-btn" id="resetFit">Reset fit</button>
+      </details>
+
+      <details class="group" open>
+        <summary>Output</summary>
+        <div class="field">
+          <span class="label">Frame rate</span>
+          <div class="seg" id="segFps" role="radiogroup" aria-label="Frame rate"></div>
+        </div>
+        <div class="field">
+          <span class="label">Resolution</span>
+          <div class="seg" id="segScale" role="radiogroup" aria-label="Output resolution"></div>
+        </div>
+        <div class="field">
+          <span class="label">GIF quality</span>
+          <div class="seg" id="segQuality" role="radiogroup" aria-label="GIF quality"></div>
+          <p class="muted small" id="qualityHint"></p>
+        </div>
+        <div class="field">
+          <span class="label">Loop</span>
+          <div class="seg" id="segLoop" role="radiogroup" aria-label="Loop"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="outPngs"> Every frame too, as a ZIP of PNGs</label>
+        <div class="field save-to">
+          <span class="label">Save to</span>
+          <div class="seg" id="segDest" role="radiogroup" aria-label="Save to"></div>
+          <div class="dest-folder" id="destFolderRow">
+            <span class="dest-name" id="destFolderName">No folder chosen yet</span>
+            <button class="btn small-btn" id="pickFolder">Choose…</button>
+          </div>
+          <p class="muted small" id="destHint"></p>
+        </div>
+        <p class="summary" id="outSummary"></p>
+        <p class="warn small" id="outWarn" hidden></p>
+      </details>
+
+      <details class="group" open>
+        <summary>Crop</summary>
+        <label class="check"><input type="checkbox" id="cropOn"> Crop the output</label>
+        <div class="crop-body" id="cropBody">
+          <div class="field">
+            <span class="label">Aspect</span>
+            <div class="seg" id="segAspect" role="radiogroup" aria-label="Crop aspect"></div>
+          </div>
+          <div class="grid4">
+            <label>X <input type="number" id="cropX" min="0" step="1"></label>
+            <label>Y <input type="number" id="cropY" min="0" step="1"></label>
+            <label>W <input type="number" id="cropW" min="16" step="1"></label>
+            <label>H <input type="number" id="cropH" min="16" step="1"></label>
+          </div>
+          <div class="row">
+            <button class="btn small-btn" id="cropHomer">Frame the head</button>
+            <button class="btn small-btn" id="cropReset">Full frame</button>
+          </div>
+          <p class="muted small">Drag on the preview to draw, move or resize the crop.</p>
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>Hedge</summary>
+        <label class="check"><input type="checkbox" id="occOn"> Hide the face behind the hedge</label>
+        <div class="field">
+          <label for="occSens">Leaf threshold <output id="occSensOut"></output></label>
+          <input type="range" id="occSens" min="6" max="40" step="1">
+        </div>
+        <div class="field">
+          <label for="occSoft">Edge softness <output id="occSoftOut"></output></label>
+          <input type="range" id="occSoft" min="2" max="20" step="1">
+        </div>
+      </details>
+
+      <details class="group">
+        <summary>Tracking</summary>
+        <p class="muted small" id="trackInfo">–</p>
+        <div class="field">
+          <label for="smooth">Steadiness <output id="smoothOut"></output></label>
+          <input type="range" id="smooth" min="0" max="5" step="1">
+        </div>
+        <div class="field">
+          <label for="srcFps">Source frame rate <output id="srcFpsOut"></output></label>
+          <input type="range" id="srcFps" min="5" max="60" step="1">
+        </div>
+        <div class="subhead">Correct this frame</div>
+        <div class="grid3">
+          <label>X <input type="number" id="nudgeX" step="0.5"></label>
+          <label>Y <input type="number" id="nudgeY" step="0.5"></label>
+          <label>Size % <input type="number" id="nudgeS" step="0.5"></label>
+        </div>
+        <div class="row">
+          <button class="btn small-btn" id="nudgeClear">Clear frame</button>
+          <button class="btn small-btn" id="nudgeClearAll">Clear all</button>
+        </div>
+        <p class="muted small">Corrections are keyframes: frames between two blend, frames past the first or last hold it. White ticks on the timeline mark them.</p>
+        <div class="row">
+          <button class="btn small-btn" id="useRef">Use this frame as reference</button>
+          <button class="btn small-btn" id="retrack">Re-track</button>
+        </div>
+      </details>
+    </aside>
+  </main>
+
+  <div class="sheet" id="progress" hidden>
+    <div class="sheet-card">
+      <p id="progressText">Rendering…</p>
+      <div class="meter"><div id="progressBar"></div></div>
+      <button class="btn" id="cancel">Cancel</button>
+    </div>
+  </div>
+</body>
+</html>

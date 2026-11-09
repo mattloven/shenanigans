@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Enhance Frames</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="enhance.css">
+  <script type="module" src="js/enhance-page.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <h1>Enhance frames</h1>
+    </div>
+    <p class="status" id="status" role="status">Loading frames…</p>
+    <div class="bar-actions">
+      <a class="btn ghost" href="index.html">Back to face swap</a>
+    </div>
+  </header>
+
+  <main class="enh">
+    <section class="enh-stage">
+      <div class="compare" id="compare">
+        <canvas id="view"></canvas>
+        <div class="divider" id="divider" aria-hidden="true"></div>
+        <span class="tag left">Original</span>
+        <span class="tag right">Filters</span>
+      </div>
+      <div class="transport">
+        <div class="timeline">
+          <input type="range" id="frame" min="0" max="0" value="0" aria-label="Frame">
+        </div>
+        <span class="frame-label" id="frameLabel">–</span>
+        <label class="chip"><input type="checkbox" id="zoom"><span>Zoom 1:1</span></label>
+      </div>
+      <p class="muted small">Drag across the picture to move the split. With zoom on, drag to look around.</p>
+    </section>
+
+    <aside class="panel">
+      <details class="group" open>
+        <summary>Real-ESRGAN (recommended)</summary>
+        <p class="muted small">An AI upscaler trained on anime and cartoons: crisp lines and clean paint. Runs on the graphics card, about 20 seconds for 147 frames at 2×.</p>
+        <div class="field">
+          <span class="label">Upscale</span>
+          <div class="seg" id="segEsr" role="radiogroup" aria-label="Real-ESRGAN upscale"></div>
+        </div>
+        <button class="btn primary" id="esrRun">Run Real-ESRGAN on all frames and save</button>
+        <div class="meter run-meter" hidden id="esrMeter"><div id="esrBar"></div></div>
+        <p class="small" id="esrText"></p>
+      </details>
+
+      <details class="group">
+        <summary>Filter look</summary>
+        <p class="muted small">Hand-tuned filters, an alternative to Real-ESRGAN. The right half of the comparison shows them.</p>
+        <div class="field">
+          <span class="label">Upscale</span>
+          <div class="seg" id="segScale" role="radiogroup" aria-label="Upscale"></div>
+        </div>
+        <div class="field">
+          <label for="clean">Clean-up <output id="cleanOut"></output></label>
+          <input type="range" id="clean" min="0" max="3" step="1">
+        </div>
+        <div class="field">
+          <label for="snap">Flatten paint <output id="snapOut"></output></label>
+          <input type="range" id="snap" min="0" max="40" step="1">
+        </div>
+        <div class="field">
+          <label for="pop">Colour pop <output id="popOut"></output></label>
+          <input type="range" id="pop" min="0" max="0.6" step="0.01">
+        </div>
+        <div class="field">
+          <label for="crisp">Crisp lines <output id="crispOut"></output></label>
+          <input type="range" id="crisp" min="0" max="2" step="0.1">
+        </div>
+        <button class="btn small-btn" id="resetLook">Reset</button>
+      </details>
+      <details class="group" open>
+        <summary>Save</summary>
+        <p class="muted small" id="saveInfo"></p>
+        <button class="btn" id="run">Apply the filters to all frames and save</button>
+        <div class="meter run-meter" hidden id="runMeter"><div id="runBar"></div></div>
+        <p class="small" id="runText"></p>
+        <button class="btn small-btn" id="restore" hidden>Restore the originals</button>
+      </details>
+    </aside>
+  </main>
+</body>
+</html>

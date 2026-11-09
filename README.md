@@ -1,5 +1,9 @@
 # shenanigans
 
+## Sites
+
+- [Hedge Face Swap](sites/homer-face-swap) — Local web app that puts a face from a transparent PNG onto the head in the "backs into the hedge" frame set, tracks it frame by frame, hides it behind the leaves as the hedge closes in, and saves the GIF plus every frame. Run it with `node sites/homer-face-swap/server.mjs`.
+
 ## Chrome extensions
 
 - [Bitbucket Rich Diff](chrome-extensions/bitbucket-rich-diff) — Diff, rich diff, and preview tabs for Markdown and JSON files on Bitbucket Cloud pull requests, plus file-list filters that hide Markdown, chosen extensions, and JavaScript, TypeScript, and C# comments.
